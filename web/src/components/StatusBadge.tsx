@@ -8,13 +8,13 @@ const styles: Record<DisplayStatus, { label: string; className: string; dot: str
   },
   pending: {
     label: 'Pending',
-    className: 'bg-amber-50 text-amber-700',
-    dot: 'bg-amber-500',
+    className: 'bg-warn-soft text-warn-text',
+    dot: 'bg-warn-solid',
   },
   failed: {
     label: 'Failed',
-    className: 'bg-rose-50 text-rose-700',
-    dot: 'bg-rose-500',
+    className: 'bg-danger-soft text-danger-text',
+    dot: 'bg-danger-solid',
   },
 };
 

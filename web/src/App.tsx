@@ -49,7 +49,7 @@ function Shell() {
   useMonthPrefetch(currency, month, months);
 
   return (
-    <div className="flex min-h-full w-full flex-col bg-white md:h-full md:flex-row">
+    <div className="flex min-h-full w-full flex-col bg-surface md:h-full md:flex-row">
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col md:h-full md:overflow-hidden">

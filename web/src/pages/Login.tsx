@@ -15,10 +15,10 @@ export function Login() {
           event.preventDefault();
           login.mutate(password);
         }}
-        className="w-full max-w-sm rounded-xl border border-line bg-white p-6 shadow-card"
+        className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-card"
       >
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-[13px] font-semibold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-[13px] font-semibold text-canvas">
             iM
           </span>
           <span className="text-[15px] font-semibold tracking-tight text-ink-900">InvoiceMCP</span>
@@ -42,7 +42,7 @@ export function Login() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="h-10 w-full rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 focus:border-line-strong focus:bg-white"
+              className="h-10 w-full rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 focus:border-line-strong focus:bg-surface"
             />
           </div>
         </label>

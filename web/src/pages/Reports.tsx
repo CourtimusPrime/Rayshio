@@ -17,6 +17,7 @@ import { ConversionNote } from '../components/ConversionNote';
 import { FiscalYearSetting } from '../components/FiscalYearSetting';
 import { ServiceLogo } from '../components/ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingBlock } from '../components/states';
+import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import type { PeriodType } from '../types';
 import { formatCurrency, formatPercent } from '../utils/format';
@@ -28,6 +29,7 @@ import { formatCurrency, formatPercent } from '../utils/format';
  */
 export function Reports() {
   const { currency } = useWorkspace();
+  const chart = useChartColors();
   const [type, setType] = useState<PeriodType>('quarter');
   const [periodKey, setPeriodKey] = useState<string | undefined>();
 
@@ -56,7 +58,7 @@ export function Reports() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6">
+      <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
         <div className="flex flex-wrap items-center gap-3">
           <div
             role="tablist"
@@ -115,7 +117,7 @@ export function Reports() {
       </section>
 
       {error && (
-        <section className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6">
+        <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
           <ErrorNote message={error.message} />
         </section>
       )}
@@ -126,7 +128,7 @@ export function Reports() {
         <>
           <section
             aria-labelledby="report-total-heading"
-            className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+            className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -152,31 +154,26 @@ export function Reports() {
             <div className="mt-5 h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.trend} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
-                  <CartesianGrid stroke="#f2f2f5" vertical={false} />
+                  <CartesianGrid stroke={chart.grid} vertical={false} />
                   <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: '#71717a', fontSize: 12 }}
+                    tick={{ fill: chart.labelTick, fontSize: 12 }}
                     dy={6}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: '#9b9ba3', fontSize: 11 }}
+                    tick={{ fill: chart.axisTick, fontSize: 11 }}
                     tickFormatter={(value: number) => formatCurrency(value, currency, true)}
                   />
                   <Tooltip
-                    cursor={{ fill: '#fafafa' }}
-                    contentStyle={{
-                      borderRadius: 10,
-                      border: '1px solid #ececf0',
-                      boxShadow: '0 6px 24px rgba(24,24,28,0.08)',
-                      fontSize: 12,
-                    }}
+                    cursor={{ fill: chart.cursor }}
+                    contentStyle={chart.tooltip}
                     formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                   />
-                  <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} fill="#0f766e" />
+                  <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} fill={chart.accent} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -214,7 +211,7 @@ export function Reports() {
 
           <section
             aria-labelledby="report-vendors-heading"
-            className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+            className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
           >
             <h2 id="report-vendors-heading" className="text-sm font-medium text-ink-900">
               Top vendors by spend
@@ -232,35 +229,30 @@ export function Reports() {
                       margin={{ top: 8, right: 4, bottom: 0, left: -12 }}
                       barSize={26}
                     >
-                      <CartesianGrid stroke="#f2f2f5" vertical={false} />
+                      <CartesianGrid stroke={chart.grid} vertical={false} />
                       <XAxis
                         dataKey="service"
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fill: '#71717a', fontSize: 12 }}
+                        tick={{ fill: chart.labelTick, fontSize: 12 }}
                         dy={6}
                       />
                       <YAxis
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fill: '#9b9ba3', fontSize: 11 }}
+                        tick={{ fill: chart.axisTick, fontSize: 11 }}
                         tickFormatter={(value: number) => formatCurrency(value, currency, true)}
                       />
                       <Tooltip
-                        cursor={{ fill: '#fafafa' }}
-                        contentStyle={{
-                          borderRadius: 10,
-                          border: '1px solid #ececf0',
-                          boxShadow: '0 6px 24px rgba(24,24,28,0.08)',
-                          fontSize: 12,
-                        }}
+                        cursor={{ fill: chart.cursor }}
+                        contentStyle={chart.tooltip}
                         formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                       />
                       <Bar dataKey="total_minor" radius={[6, 6, 0, 0]}>
                         {services.map((entry) => (
                           <Cell
                             key={entry.service}
-                            fill={entry.total_minor === maxService ? '#0f766e' : '#cfe4e2'}
+                            fill={entry.total_minor === maxService ? chart.accent : chart.barMuted}
                           />
                         ))}
                       </Bar>
@@ -273,7 +265,7 @@ export function Reports() {
 
           <section
             aria-labelledby="report-categories-heading"
-            className="overflow-hidden rounded-xl border border-line bg-white shadow-card"
+            className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
           >
             <div className="px-5 py-4 md:px-6">
               <h2 id="report-categories-heading" className="text-sm font-medium text-ink-900">

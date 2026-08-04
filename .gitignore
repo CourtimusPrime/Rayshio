@@ -5,3 +5,5 @@ web/dist/
 *.log
 .DS_Store
 *.tsbuildinfo
+graphify-out/
+graphify-out/

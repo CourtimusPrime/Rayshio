@@ -32,7 +32,7 @@ export function LoadingLines({ rows = 3 }: { rows?: number }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-rose-50 px-3.5 py-3 text-[13px] text-rose-700">
+    <div className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3.5 py-3 text-[13px] text-danger-text">
       <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
       <span>{message}</span>
     </div>

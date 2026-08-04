@@ -1,6 +1,7 @@
 import { ArrowDownRightIcon, ArrowRightIcon, ArrowUpRightIcon } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useSummary } from '../api/hooks';
+import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency, formatPercent } from '../utils/format';
 import { AnimatedCount, AnimatedCurrency } from './AnimatedNumber';
@@ -14,7 +15,7 @@ export function SpendSummaryCard() {
   return (
     <section
       aria-labelledby="spend-summary-heading"
-      className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+      className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
     >
       {error && <ErrorNote message={error.message} />}
       {!error && (isPending || !currency || !data) && <LoadingBlock className="h-56" />}
@@ -30,6 +31,7 @@ function Body({
   data: NonNullable<ReturnType<typeof useSummary>['data']>;
   currency: string;
 }) {
+  const chart = useChartColors();
   const {
     current_total_minor: current,
     previous_total_minor: previous,
@@ -48,7 +50,7 @@ function Body({
     delta === null || Math.abs(delta) < 0.05
       ? { className: 'bg-canvas text-ink-500', Icon: ArrowRightIcon }
       : delta > 0
-        ? { className: 'bg-amber-50 text-amber-700', Icon: ArrowUpRightIcon }
+        ? { className: 'bg-warn-soft text-warn-text', Icon: ArrowUpRightIcon }
         : { className: 'bg-accent-soft text-accent-strong', Icon: ArrowDownRightIcon };
 
   return (
@@ -86,29 +88,24 @@ function Body({
           <AreaChart data={trend} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <defs>
               <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#0f766e" stopOpacity={0.14} />
-                <stop offset="100%" stopColor="#0f766e" stopOpacity={0} />
+                <stop offset="0%" stopColor={chart.accent} stopOpacity={0.14} />
+                <stop offset="100%" stopColor={chart.accent} stopOpacity={0} />
               </linearGradient>
             </defs>
             <Tooltip
-              cursor={{ stroke: '#e0e0e6' }}
-              contentStyle={{
-                borderRadius: 10,
-                border: '1px solid #ececf0',
-                boxShadow: '0 6px 24px rgba(24,24,28,0.08)',
-                fontSize: 12,
-              }}
+              cursor={{ stroke: chart.grid }}
+              contentStyle={chart.tooltip}
               labelFormatter={(_label, payload) => payload?.[0]?.payload?.label ?? ''}
               formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
             />
             <Area
               type="monotone"
               dataKey="total_minor"
-              stroke="#0f766e"
+              stroke={chart.accent}
               strokeWidth={2}
               fill="url(#spendFill)"
               dot={false}
-              activeDot={{ r: 3, fill: '#0f766e', strokeWidth: 0 }}
+              activeDot={{ r: 3, fill: chart.accent, strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>

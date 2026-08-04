@@ -35,7 +35,7 @@ export function FiscalYearSetting() {
         onChange={(event) =>
           setFiscalYear.mutate({ fiscal_year_start_month: Number(event.target.value) })
         }
-        className="h-8 rounded-lg border border-line bg-white px-2 text-[13px] text-ink-900 hover:bg-canvas"
+        className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-900 hover:bg-canvas"
       >
         {MONTHS.map((name, i) => (
           <option key={name} value={i + 1}>

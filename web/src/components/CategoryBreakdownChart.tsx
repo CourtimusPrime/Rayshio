@@ -1,6 +1,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useCategories } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
+import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency } from '../utils/format';
 import { AnimatedCurrency } from './AnimatedNumber';
@@ -9,6 +10,7 @@ import { EmptyNote, ErrorNote, LoadingBlock } from './states';
 
 export function CategoryBreakdownChart() {
   const { currency, month } = useWorkspace();
+  const chart = useChartColors();
   const { data, isPending, error } = useCategories(currency, month);
 
   // negative rows (credits, included-usage offsets) cannot be drawn as pie
@@ -20,7 +22,7 @@ export function CategoryBreakdownChart() {
   return (
     <section
       aria-labelledby="category-breakdown-heading"
-      className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+      className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
     >
       <h2 id="category-breakdown-heading" className="text-sm font-medium text-ink-900">
         Spend by usage category
@@ -53,12 +55,7 @@ export function CategoryBreakdownChart() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      borderRadius: 10,
-                      border: '1px solid #ececf0',
-                      boxShadow: '0 6px 24px rgba(24,24,28,0.08)',
-                      fontSize: 12,
-                    }}
+                    contentStyle={chart.tooltip}
                     formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                   />
                 </PieChart>

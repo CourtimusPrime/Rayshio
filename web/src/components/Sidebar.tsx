@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useWorkspace } from '../state/workspace';
+import { ThemeToggle } from './ThemeToggle';
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboardIcon, end: true },
@@ -25,9 +26,9 @@ export function Sidebar() {
   const endpoint = meta?.mcp_endpoint.replace(/^https?:\/\//, '');
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-white md:h-full md:w-60 md:border-b-0 md:border-r">
+    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-surface md:h-full md:w-60 md:border-b-0 md:border-r">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-[13px] font-semibold text-white">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-[13px] font-semibold text-canvas">
           iM
         </span>
         <span className="text-[15px] font-semibold tracking-tight text-ink-900">InvoiceMCP</span>
@@ -63,8 +64,9 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="mt-auto hidden px-4 pb-5 md:block">
-        <div className="rounded-xl border border-line bg-canvas p-3.5">
+      <div className="mt-auto space-y-3 px-4 pb-4 md:pb-5">
+        {/* the endpoint card is desktop-only for space; the toggle is not */}
+        <div className="hidden rounded-xl border border-line bg-canvas p-3.5 md:block">
           <div className="flex items-center gap-2">
             <TerminalIcon className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
             <span className="text-xs font-medium text-ink-900">MCP server</span>
@@ -74,6 +76,7 @@ export function Sidebar() {
             {endpoint ?? '—'}
           </p>
         </div>
+        <ThemeToggle />
       </div>
     </aside>
   );

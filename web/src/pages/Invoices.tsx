@@ -43,7 +43,7 @@ export function Invoices() {
   const [selected, setSelected] = useState<number | null>(null);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-white shadow-card">
+    <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
         <div>
           <h2 className="text-sm font-medium text-ink-900">All invoices</h2>
@@ -71,7 +71,7 @@ export function Invoices() {
               placeholder="Search invoices"
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-white"
+              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
             />
           </label>
         </form>
@@ -84,7 +84,7 @@ export function Invoices() {
               setStatus(event.target.value);
               setPage(0);
             }}
-            className="h-9 rounded-lg border border-line bg-white px-2.5 text-[13px] text-ink-900 hover:bg-canvas"
+            className="h-9 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-ink-900 hover:bg-canvas"
           >
             {statuses.map((value) => (
               <option key={value} value={value}>

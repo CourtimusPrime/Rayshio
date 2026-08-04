@@ -21,14 +21,14 @@ const states: Record<
   },
   near: {
     label: 'Nearing budget',
-    bar: 'bg-amber-500',
-    chip: 'bg-amber-50 text-amber-700',
+    bar: 'bg-warn-solid',
+    chip: 'bg-warn-soft text-warn-text',
     icon: TrendingUpIcon,
   },
   over: {
     label: 'Over budget',
-    bar: 'bg-rose-500',
-    chip: 'bg-rose-50 text-rose-700',
+    bar: 'bg-danger-solid',
+    chip: 'bg-danger-soft text-danger-text',
     icon: AlertTriangleIcon,
   },
 };
@@ -42,14 +42,14 @@ export function BudgetComparisonCard() {
 
   if (error) {
     return (
-      <section className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6">
+      <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
         <ErrorNote message={error.message} />
       </section>
     );
   }
   if (isPending || !data || !currency) {
     return (
-      <section className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6">
+      <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
         <LoadingBlock className="h-56" />
       </section>
     );
@@ -94,7 +94,7 @@ export function BudgetComparisonCard() {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="none"
-          className="tnum h-9 w-32 rounded-lg border border-line bg-canvas px-3 text-sm text-ink-900 focus:border-line-strong focus:bg-white"
+          className="tnum h-9 w-32 rounded-lg border border-line bg-canvas px-3 text-sm text-ink-900 focus:border-line-strong focus:bg-surface"
         />
       </label>
       <button
@@ -117,7 +117,7 @@ export function BudgetComparisonCard() {
     return (
       <section
         aria-labelledby="budget-heading"
-        className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+        className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
         <h2 id="budget-heading" className="text-sm font-medium text-ink-500">
           Last month vs budget · {data.previous_month_label}
@@ -151,7 +151,7 @@ export function BudgetComparisonCard() {
   return (
     <section
       aria-labelledby="budget-heading"
-      className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+      className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
     >
       <div className="flex items-start justify-between gap-4">
         <div>

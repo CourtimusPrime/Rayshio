@@ -70,7 +70,7 @@ export function InvoiceCalendar() {
   return (
     <section
       aria-labelledby="calendar-heading"
-      className="overflow-hidden rounded-xl border border-line bg-white shadow-card"
+      className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
     >
       <div className="flex flex-wrap items-center gap-4 px-5 py-4 md:px-6">
         <div>
@@ -155,14 +155,14 @@ export function InvoiceCalendar() {
                 <div
                   key={key}
                   className={`min-h-[92px] border-b border-r border-line p-2 last:border-r-0 [&:nth-child(7n)]:border-r-0 ${
-                    outside ? 'bg-canvas/60' : 'bg-white'
+                    outside ? 'bg-canvas/60' : 'bg-surface'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span
                       className={`tnum flex h-6 w-6 items-center justify-center rounded-full text-xs ${
                         isToday
-                          ? 'bg-ink-900 font-medium text-white'
+                          ? 'bg-ink-900 font-medium text-canvas'
                           : outside
                             ? 'text-ink-400'
                             : 'text-ink-700'

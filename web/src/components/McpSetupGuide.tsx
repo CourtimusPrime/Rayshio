@@ -96,7 +96,7 @@ export function McpSetupGuide() {
     <div className="space-y-6">
       <section
         aria-labelledby="mcp-endpoint-heading"
-        className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+        className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
         <h2 id="mcp-endpoint-heading" className="text-sm font-medium text-ink-900">
           Connect InvoiceMCP to your AI client
@@ -139,7 +139,7 @@ export function McpSetupGuide() {
         <div
           role="tablist"
           aria-label="MCP clients"
-          className="flex gap-1.5 overflow-x-auto rounded-xl border border-line bg-white p-1.5 shadow-card"
+          className="flex gap-1.5 overflow-x-auto rounded-xl border border-line bg-surface p-1.5 shadow-card"
         >
           {mcpClients.map((client) => {
             const isActive = client.id === active.id;
@@ -168,7 +168,7 @@ export function McpSetupGuide() {
           role="tabpanel"
           id={`panel-${active.id}`}
           aria-labelledby={`tab-${active.id}`}
-          className="overflow-hidden rounded-xl border border-line bg-white shadow-card"
+          className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
         >
           <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
             <div>
@@ -202,7 +202,7 @@ export function McpSetupGuide() {
 
       <section
         aria-labelledby="mcp-tools-heading"
-        className="rounded-xl border border-line bg-white p-5 shadow-card md:p-6"
+        className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
         <h2 id="mcp-tools-heading" className="text-sm font-medium text-ink-900">
           Tools your agent gets
