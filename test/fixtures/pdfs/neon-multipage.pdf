@@ -1,0 +1,97 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 600 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+50 780 Td
+(Neon Inc.                                    INVOICE) Tj
+T*
+(Invoice number: NEON-2026-0342) Tj
+T*
+(Invoice date: 2026-03-01    Due date: 2026-03-15) Tj
+T*
+(Billing period: 2026-02-01 to 2026-02-28) Tj
+T*
+(Billed to: techteam@nczgroup.com) Tj
+T*
+() Tj
+T*
+(Description                Qty      Unit       Rate     Amount) Tj
+T*
+(Compute                  102.50   CU-hour     $0.41     $42.03) Tj
+T*
+(Storage                   18.20   GB-month    $0.35      $6.37) Tj
+T*
+(Branch compute             4.00   CU-hour     $0.41      $1.64) Tj
+T*
+() Tj
+T*
+(Page 1 of 2) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 569 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+50 780 Td
+(Neon Inc.                       Invoice NEON-2026-0342) Tj
+T*
+() Tj
+T*
+(Description                Qty      Unit       Rate     Amount) Tj
+T*
+(Data transfer              3.10   GB          $0.09      $0.28) Tj
+T*
+(Support plan               1.00   month       $5.00      $5.00) Tj
+T*
+() Tj
+T*
+(Subtotal                                                $55.32) Tj
+T*
+(Discount \(startup program\)                              -$5.53) Tj
+T*
+(Total due                                               $49.79) Tj
+T*
+() Tj
+T*
+(Page 2 of 2) Tj
+T*
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000189 00000 n 
+0000000315 00000 n 
+0000000966 00000 n 
+0000001092 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+1712
+%%EOF

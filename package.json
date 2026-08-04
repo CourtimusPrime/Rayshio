@@ -1,0 +1,52 @@
+{
+  "name": "invoice-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start:mcp": "node dist/mcp/server.js",
+    "start:worker": "node dist/queue/worker.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check src test",
+    "lint:fix": "biome check --write src test",
+    "cli": "tsx src/cli/index.ts",
+    "worker": "tsx src/queue/worker.ts",
+    "mcp": "tsx src/mcp/server.ts",
+    "migrate": "sh scripts/migrate.sh",
+    "codegen": "sh scripts/codegen.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "bullmq": "^5.44.0",
+    "commander": "^13.1.0",
+    "express": "^5.1.0",
+    "googleapis": "^148.0.0",
+    "ioredis": "^5.11.1",
+    "kysely": "^0.28.2",
+    "mongodb": "^6.16.0",
+    "openai": "^4.98.0",
+    "pg": "^8.15.6",
+    "unpdf": "^0.12.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.4",
+    "zod-to-json-schema": "^3.24.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@dbml/core": "^3.9.5",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.17",
+    "@types/pg": "^8.11.14",
+    "kysely-codegen": "^0.18.5",
+    "node-pg-migrate": "^7.9.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.3"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "18f2a3b4c5d6e7f9",
+  "internalDate": "1743500001000",
+  "payload": {
+    "mimeType": "multipart/alternative",
+    "headers": [
+      { "name": "From", "value": "Product Weekly <hello@productweekly.io>" },
+      { "name": "To", "value": "techteam@nczgroup.com" },
+      { "name": "Subject", "value": "Newsletter: how we cut our invoice processing time" }
+    ],
+    "parts": [
+      {
+        "mimeType": "text/html",
+        "body": {
+          "data": "PGh0bWw-PGJvZHk-QSBzdG9yeSBhYm91dCBpbnZvaWNlcy4gPGEgaHJlZj0iIyI-dW5zdWJzY3JpYmU8L2E-PC9ib2R5PjwvaHRtbD4"
+        }
+      }
+    ]
+  }
+}

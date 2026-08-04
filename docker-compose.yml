@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: invoicemcp
+      POSTGRES_PASSWORD: invoicemcp
+      POSTGRES_DB: invoicemcp
+    ports:
+      - '5434:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mongo:
+    image: mongo:8
+    ports:
+      - '27018:27017'
+    volumes:
+      - mongodata:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6380:6379'
+
+volumes:
+  pgdata:
+  mongodata:

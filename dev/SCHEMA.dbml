@@ -1,0 +1,83 @@
+Table "client"."org" {
+  "id" bigint [pk, not null, increment]
+  "name" text [not null]
+}
+
+Table "client"."account" {
+  "id" bigint [pk, not null, increment]
+  "org_id" bigint [not null, ref: > "client"."org"."id"]
+  "provider" text [not null, note: 'google | microsoft']
+  "email_address" text [not null]
+  "refresh_token_encrypted" text [not null]
+  "connected_at" timestamp [not null]
+  "status" text [not null, default: 'active', note: 'active | revoked | error']
+
+  Indexes {
+    (org_id, email_address) [unique, name: "index_account_org_email"]
+  }
+}
+
+Table "client"."billing_address" {
+  "id" bigint [pk, not null, increment]
+  "org_id" bigint [not null, ref: > "client"."org"."id"]
+  "address" text [not null]
+
+  Indexes {
+    (org_id, address) [unique, name: "index_2"]
+  }
+}
+
+Table "billing"."email" {
+  "id" bigint [pk, not null, increment, ref: - "billing"."invoices"."email_id"]
+  "recipient_id" bigint [not null, ref: > "client"."billing_address"."id"]
+  "server_id" bigint [not null, ref: > "server"."service"."id"]
+  "message_id" text [not null, note: 'provider message id, used for idempotency']
+  "delivered_at" timestamp [not null]
+
+  Indexes {
+    (server_id, message_id) [unique, name: "index_email_dedupe"]
+  }
+}
+
+Table "billing"."invoices" {
+  "id" bigint [pk, not null, increment]
+  "org_id" bigint [not null, ref: > "client"."org"."id"]
+  "email_id" bigint [unique]
+  "invoice_number" text
+  "value" bigint [not null, note: 'total amount in minor units (cents)']
+  "currency" varchar(3) [not null, default: 'USD']
+  "invoice_date" date
+  "due_date" date
+  "period_start" date
+  "period_end" date
+  "pdf_id" uuid [note: 'points to a PDF document in MongoDB; null until fetched']
+  "status" text [not null, default: 'pending', note: 'pending | parsed | failed']
+}
+
+Table "billing"."invoice_line_items" {
+  "id" bigint [pk, not null, increment]
+  "invoice_id" bigint [not null, ref: > "billing"."invoices"."id"]
+  "description" text [not null, note: 'e.g. \"Compute, CU-hour\"']
+  "quantity" numeric
+  "unit" text [note: 'e.g. CU-hour, GB-month, branch-month']
+  "rate" bigint [note: 'unit rate in minor units (cents); null for flat/zero-rate lines']
+  "amount" bigint [not null, note: 'line amount in minor units (cents)']
+  "period_start" date
+  "period_end" date
+
+  Indexes {
+    invoice_id [name: "index_line_items_invoice"]
+  }
+}
+
+Table "server"."service" {
+  "id" bigint [pk, not null, increment]
+  "name" text [not null]
+  "sender_address" text [not null, note: 'address the invoice email is sent FROM']
+
+  Indexes {
+    (name, sender_address) [unique, name: "index_service_name_sender"]
+  }
+
+  Note: 'Subscribed services that send invoices'
+}

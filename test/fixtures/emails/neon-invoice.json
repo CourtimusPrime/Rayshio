@@ -1,0 +1,35 @@
+{
+  "id": "18f2a3b4c5d6e7f8",
+  "internalDate": "1743500000000",
+  "payload": {
+    "mimeType": "multipart/mixed",
+    "headers": [
+      { "name": "From", "value": "Neon <invoices@neon.tech>" },
+      { "name": "To", "value": "Court <techteam@nczgroup.com>" },
+      { "name": "Delivered-To", "value": "techteam@nczgroup.com" },
+      { "name": "Subject", "value": "Your Neon invoice for March 2026" }
+    ],
+    "parts": [
+      {
+        "mimeType": "multipart/alternative",
+        "parts": [
+          {
+            "mimeType": "text/plain",
+            "body": {
+              "data": "WW91ciBpbnZvaWNlIGZvciBNYXJjaCBpcyBhdHRhY2hlZC4gQW1vdW50IGR1ZTogJDQyLjE3"
+            }
+          },
+          {
+            "mimeType": "text/html",
+            "body": { "data": "PGh0bWw-PGJvZHk-WW91ciBpbnZvaWNlPC9ib2R5PjwvaHRtbD4" }
+          }
+        ]
+      },
+      {
+        "mimeType": "application/pdf",
+        "filename": "neon-invoice-2026-03.pdf",
+        "body": { "attachmentId": "ANGjdJ8w_attachment_id" }
+      }
+    ]
+  }
+}
