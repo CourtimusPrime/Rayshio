@@ -37,8 +37,23 @@ ingested from Gmail and normalized into Postgres (structured data) + MongoDB
 `spend_summary` — all scoped to `DEFAULT_ORG_ID`; money in minor units,
 per-currency aggregation, no FX conversion.
 
-Claude Desktop: add a custom connector with URL `https://<host>/mcp` and
-header `Authorization: Bearer <MCP_API_KEY>`.
+Claude Desktop's connector UI expects OAuth, which this MVP doesn't
+implement — bridge with [mcp-remote](https://www.npmjs.com/package/mcp-remote)
+in `claude_desktop_config.json` instead:
+
+```json
+{
+  "mcpServers": {
+    "invoice-mcp": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "https://<host>/mcp",
+        "--header", "Authorization: Bearer <MCP_API_KEY>"
+      ]
+    }
+  }
+}
+```
 
 ## Development
 
