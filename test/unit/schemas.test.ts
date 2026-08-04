@@ -12,6 +12,7 @@ const valid = {
   line_items: [
     {
       description: 'Compute, CU-hour',
+      category: 'compute',
       quantity: 102.5,
       unit: 'CU-hour',
       rate_minor: 41,

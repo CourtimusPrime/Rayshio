@@ -30,6 +30,17 @@ const envSchema = z.object({
   DEFAULT_ORG_ID: z.coerce.number().int().default(1),
 
   SYNC_CRON: z.string().default('0 6 1 * *'),
+
+  DASHBOARD_PASSWORD: z.string().min(8).optional(),
+  DASHBOARD_SESSION_SECRET: z
+    .string()
+    .refine((s) => Buffer.from(s, 'base64').length === 32, 'must be 32 bytes, base64-encoded')
+    .optional(),
+  DASHBOARD_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
+  /** ECB-backed rate source used for query-time currency conversion. */
+  FX_BASE_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
+  /** Endpoint the dashboard's MCP page tells users to point their client at. */
+  PUBLIC_MCP_URL: z.string().url().default('http://localhost:3000/mcp'),
 });
 
 export type Config = z.infer<typeof envSchema>;

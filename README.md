@@ -26,10 +26,48 @@ ingested from Gmail and normalized into Postgres (structured data) + MongoDB
 | Command | What |
 |---|---|
 | `pnpm worker` | ingestion worker (BullMQ; registers the monthly sync cron) |
-| `pnpm mcp` | MCP server on `:3000` (Streamable HTTP at `POST /mcp`, API key auth) |
+| `pnpm mcp` | MCP server + dashboard API on `:3000`; also serves `web/dist` when built |
+| `pnpm dev:web` | Vite dev server on `:5173`, proxying `/api` → `:3000` |
 | `pnpm cli discover` | whole-mailbox billing-sender discovery → auto-backfill |
 | `pnpm cli backfill --service <id>` | full history for one sender |
 | `pnpm cli sync` | incremental sync now (otherwise monthly via `SYNC_CRON`) |
+| `pnpm cli categorize` | backfill usage categories onto invoice line items |
+
+## Dashboard
+
+A React SPA at `/`, served by the same process as the MCP server. Pages:
+Dashboard (spend, budget, top vendors, recent invoices), Breakdown (usage
+categories rolled up across vendors), Invoices (paginated, searchable),
+Reports (the same views over fiscal quarters and years), Calendar (received +
+projected), and MCP (connection recipes).
+
+Fiscal periods derive from `client.org.fiscal_year_start_month` (default
+January, changeable on the Reports page). Fiscal years are named for the year
+they **end** in — an April start makes Apr 2025 – Mar 2026 into "FY2026" — and
+every label carries its date range, since that convention is not universal.
+
+Sign in with `DASHBOARD_PASSWORD`; the session is an HMAC-signed httpOnly
+cookie. `MCP_API_KEY` is never sent to the browser.
+
+Two behaviours worth knowing:
+
+- **Currency conversion is query-time only.** Invoices are stored in the currency
+  the vendor billed; the dashboard's currency selector is a *display* target, and
+  every invoice is converted to it at the ECB rate on that invoice's own date, so
+  a past month's total does not move when today's rate does. Converted values are
+  never written back (`SPEC.md:190-196`), and converted figures are labeled with
+  the rate date. The ECB publishes ~30 currencies — hard-pegged currencies outside
+  that set (AED) use an explicit peg table in `src/fx/rates.ts`. The MCP tools are
+  unaffected and still sum per-currency with no conversion, which is the spec's
+  documented default.
+- **Categories live on line items.** `billing.invoice_line_items.category` is
+  assigned by an LLM from a fixed five-value set, so a single vendor invoice can
+  split across categories. Classification never fails an invoice — anything
+  unclassified reads as `Other` until `pnpm cli categorize` retries it.
+
+Local development runs two processes: `pnpm mcp` and `pnpm dev:web`, then open
+`http://localhost:5173`. In production only `pnpm start:mcp` is needed, provided
+`pnpm build` has produced `web/dist`.
 
 ## MCP tools
 
@@ -61,14 +99,36 @@ in `claude_desktop_config.json` instead:
 - `pnpm codegen` — regenerate `src/db/types.ts` after schema changes
 - `tsx scripts/smoke-extract.ts [pdf]` — live LLM extraction smoke test
 - `tsx scripts/make-fixture-pdf.ts` — regenerate the multi-page fixture PDF
+- `tsx scripts/probe-mailbox.ts [query]` — read-only audit of discovery coverage:
+  replays sender attribution over the live mailbox and lists which vendors would
+  be found, which arrive via a billing alias, and which are already ingested
+
+### Billing aliases and shared inboxes
+
+Vendor invoices frequently arrive through a shared billing alias or Google Group
+(`billing@`, `techteam@`, …) rather than direct to the connected mailbox. The
+group re-sends the mail with **itself** as the RFC `From:` address, leaving the
+vendor only in the display name (`"'OpenRouter, Inc' via Tech Team"`). Keying on
+`From` alone therefore collapses every vendor behind an alias into one
+pseudo-sender that no classifier will accept as a vendor.
+
+`resolveSender` (`src/gmail/messages.ts`) prefers `X-Original-Sender` — which
+Google sets on exactly these rewrites — and records the alias as
+`ParsedMessage.deliveredVia`. Discovery additionally refuses to treat the org's
+own addresses as vendors, so invoices you forward to yourself or to a
+bookkeeping tool don't get ingested a second time.
 
 ## Deploy (Railway)
 
 One repo, two services:
 
 - **worker** — start `pnpm start:worker`
-- **mcp** — start `pnpm start:mcp` (health check `/healthz`)
+- **mcp** — start `pnpm start:mcp` (health check `/healthz`); serves the MCP
+  endpoint, the dashboard API, and the built SPA from one port
 
-Both build with `pnpm install && pnpm build`. Run `pnpm migrate up` as the
-worker's pre-deploy command. Set env vars per `.env.example` (Railway injects
-database URLs for linked Postgres/Mongo/Redis services).
+Both build with `pnpm install && pnpm build` (which also builds `web/dist`).
+Run `pnpm migrate up` as the worker's pre-deploy command. Set env vars per
+`.env.example` (Railway injects database URLs for linked Postgres/Mongo/Redis
+services). The mcp service additionally needs `DASHBOARD_PASSWORD`,
+`DASHBOARD_SESSION_SECRET`, and `PUBLIC_MCP_URL` set to its public
+`https://<host>/mcp`.

@@ -8,10 +8,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && pnpm --filter web build",
     "start:mcp": "node dist/mcp/server.js",
     "start:worker": "node dist/queue/worker.js",
-    "typecheck": "tsc --noEmit",
+    "dev:web": "pnpm --filter web dev",
+    "typecheck": "tsc --noEmit && pnpm --filter web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check src test",

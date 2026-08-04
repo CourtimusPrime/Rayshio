@@ -5,8 +5,20 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .nullable();
 
+export const CATEGORY_VALUES = [
+  'compute',
+  'storage',
+  'api_usage',
+  'ai_invocations',
+  'network',
+  'subscription',
+  'other',
+] as const;
+
 export const lineItemSchema = z.object({
   description: z.string().min(1),
+  /** Normalized category — classified in the same call as extraction (SPEC.md). */
+  category: z.enum(CATEGORY_VALUES),
   quantity: z.number().nullable(),
   unit: z.string().nullable(),
   rate_minor: z.number().int().nullable(),

@@ -98,6 +98,7 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
         extraction.line_items.map((li) => ({
           invoice_id: invoiceId,
           description: li.description,
+          category: li.category,
           quantity: li.quantity,
           unit: li.unit,
           rate: li.rate_minor,

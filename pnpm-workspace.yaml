@@ -1,3 +1,6 @@
+packages:
+  - web
+
 allowBuilds:
   '@biomejs/biome': true
   canvas: false

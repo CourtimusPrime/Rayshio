@@ -33,6 +33,10 @@ export interface BillingInvoiceLineItems {
    * line amount in minor units (cents)
    */
   amount: Int8;
+  /**
+   * usage category; null until classified
+   */
+  category: string | null;
   description: string;
   id: Generated<Int8>;
   invoice_id: Int8;
@@ -43,6 +47,10 @@ export interface BillingInvoiceLineItems {
    * unit rate in minor units (cents); null for flat/zero-rate lines
    */
   rate: Int8 | null;
+  /**
+   * origin of the itemization: parsed invoice, or an optional vendor API connection
+   */
+  source: Generated<string>;
   unit: string | null;
 }
 
@@ -86,7 +94,19 @@ export interface ClientBillingAddress {
 }
 
 export interface ClientOrg {
+  /**
+   * currency the budget is denominated in; sums are never converted
+   */
+  budget_currency: string | null;
+  /**
+   * first calendar month of the fiscal year; fiscal years are named for the year they end in
+   */
+  fiscal_year_start_month: Generated<number>;
   id: Generated<Int8>;
+  /**
+   * monthly spend budget in minor units (cents); null when unset
+   */
+  monthly_budget_minor: Int8 | null;
   name: string;
 }
 

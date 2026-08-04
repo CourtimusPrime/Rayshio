@@ -36,10 +36,32 @@ that question becomes a single query.
   invoices, services, or entire accounts from what's surfaced. This is also
   what solves cross-account separation (see below) — filtering, not
   deduplication, is the mechanism.
-- **Phase 4 — UI.** Two sub-stages: (a) spend breakdown per service, then
-  (b) breakdown by usage category grouped across vendors (e.g. total storage
-  spend across every platform that bills for storage, not just per-vendor
-  totals).
+- **Phase 4 — UI.** Four tabs:
+  - **Dashboard** — high-level breakdowns: cost per service, last month's
+    spend vs budget
+  - **Breakdown** — itemized costs by normalized category, NOT by vendor.
+    The goal is same-category cost comparison _across_ vendors — e.g.
+    seeing that Railway's biggest cost is storage rather than compute lets
+    you compare Railway's storage pricing against Azure's or Neon's and
+    make an informed call about migrating a database. This only works if
+    every vendor's line items are mapped to a shared category taxonomy
+    (see `invoice_line_items.category` in the schema) rather than left as
+    each vendor's own labeling — "Storage (root branches), GB-month" on a
+    Neon invoice and "Volume storage" on a Railway invoice both need to
+    resolve to the same `storage` category to be comparable. Show, per
+    category: total spend, and a per-vendor breakdown within that category.
+    Coverage caveat: this data only exists for vendors whose invoices
+    itemize costs, or that have an optional vendor API connection (see
+    "Itemization coverage" section below) — for everything else, the tab
+    should clearly show "no breakdown available" rather than a misleadingly
+    empty chart.
+  - **Calendar** — calendar view of past and anticipated invoice dates
+    (anticipated dates inferred from each service's historical billing
+    cadence — e.g. if Neon has billed on the 1st of each month for the
+    last 6 months, project the next expected date)
+  - **MCP** — setup/connection guide walking the user through configuring
+    InvoiceMCP as an MCP server in Claude, Claude Desktop, ChatGPT, Codex,
+    and Kilo
 
 Recurring sync (after the initial backfill in Phase 1) should run on an
 interval — e.g. monthly, aligned to whenever invoices are typically due —
@@ -56,6 +78,44 @@ already ties every ingested invoice to a specific `client.billing_address`
 (and transitively to one `client.account`/org), this isolation falls out of
 the schema for free _as long as aggregation queries always group by
 account/org first and vendor second, never by vendor name alone._
+
+## Itemization coverage & vendor API/OAuth connections
+
+Not every vendor puts itemized costs in their invoice PDF — Neon does,
+Railway generally doesn't (lump-sum totals only). Email-sourced ingestion
+can only extract what the invoice actually contains, so `Breakdown`-tab
+category data will be incomplete or entirely missing for vendors that
+don't itemize on the invoice itself.
+
+This is a data-source gap, not a schema gap — the fix is a second, optional
+ingestion path per service:
+
+- **Tier 1 (MVP, email-only):** always available for every connected
+  service. Gives invoice totals, dates, and line items _only when the
+  vendor's PDF itemizes them_.
+- **Tier 2 (post-MVP, per-service API/OAuth connection):** for a vendor
+  whose invoices don't itemize, the user can optionally connect that
+  vendor's own API/dashboard (API token or OAuth, vendor-dependent) so
+  InvoiceMCP can pull usage breakdown data directly from the source of
+  truth rather than trying to infer it from a lump-sum PDF. This is
+  strictly additive/optional — Tier 1 alone still gives correct spend
+  totals and the `Dashboard`/`Calendar` tabs work fully without it. Tier 2
+  only unlocks richer `Breakdown` data for that specific vendor.
+
+This keeps the security surface honest: read-only email access is already
+the MVP's access footprint, and each additional vendor API/OAuth connection
+is a deliberate, per-service, user-initiated opt-in — not a blanket
+requirement to get any value from the app.
+
+Schema implication: `invoice_line_items` needs a `source` field
+(`invoice_pdf | vendor_api`) so it's always clear whether a line item came
+from the parsed PDF or a connected vendor API — this matters for trust
+(PDF-derived data is closer to "what you were actually billed," API-derived
+usage data may reflect current-period usage rather than the exact billed
+period) and for not silently blending two data qualities in one chart.
+A new `client.vendor_connection` table (analogous to `client.account`, but
+per-service rather than per-mailbox) tracks these optional connections:
+org, service, auth type, credential, status.
 
 ## Core user flow (MVP)
 
@@ -100,6 +160,9 @@ produce migrations). Summary of tables:
 - `client.org` — the account/organization using InvoiceMCP
 - `client.account` — one row per connected mailbox (OAuth provider, refresh
   token, connection status)
+- `client.vendor_connection` — optional per-service API/OAuth connection
+  used to enrich `Breakdown` data for vendors whose invoices don't itemize
+  (see "Itemization coverage" section above)
 - `client.billing_address` — recipient addresses (primary + aliases) that
   invoices arrive at
 - `server.service` — vendors/senders (Neon, Stripe, AWS, etc.)
@@ -109,12 +172,19 @@ produce migrations). Summary of tables:
   dates, and a `status` field (`pending | parsed | failed`) tracking pipeline
   progress
 - `billing.invoice_line_items` — itemized cost breakdown per invoice
-  (description, quantity, unit, rate, amount, period), so agents can answer
-  "what's driving the cost" not just "how much total"
+  (description, normalized category, source, quantity, unit, rate, amount,
+  period), so agents can answer "what's driving the cost" not just "how
+  much total" — only populated when a vendor's invoice itemizes or a
+  `vendor_connection` supplies usage data
 
 **Money is always stored as integers in minor units (cents)**, never float.
 `invoice.value` = sum of `invoice_line_items.amount` for that invoice
 (reconciliation check worth asserting in the extraction pipeline).
+
+**Note for Phase 4:** the Dashboard tab's "spend vs budget" view needs a
+budget figure to compare against, which isn't in the current schema — add
+a `monthly_budget` (or similar) column to `client.org` when Phase 4 work
+starts, since it's user-set rather than derived.
 
 ## Pipeline stages & failure handling
 
@@ -148,8 +218,9 @@ Expose at minimum:
 - `list_invoices(org_id, service?, date_range?)` — invoice list with totals
 - `get_invoice(invoice_id)` — full invoice detail incl. line items
 - `get_invoice_pdf(invoice_id)` — fetch the underlying PDF from Mongo
-- `spend_summary(org_id, group_by: service|line_item_description, date_range?)`
-  — aggregated spend, this is the "what's driving my cost" query
+- `spend_summary(org_id, group_by: service|category, date_range?)` —
+  aggregated spend; `group_by: category` is the cross-vendor comparison
+  query ("what's driving my storage cost across every vendor")
 
 Exact MCP tool schema/transport (stdio vs HTTP) is an implementation
 decision Claude Code should propose, not fixed here.
@@ -187,6 +258,16 @@ every extraction: line-item `amount`s should sum to the invoice `value`
 within rounding tolerance — mark `status: failed` and log the mismatch
 otherwise, don't trust an unreconciled extraction.
 
+Each line item must also be classified into the fixed `category`
+taxonomy (`compute | storage | api_usage | ai_invocations | network |
+subscription | other`) as part of the same extraction call — this is what
+makes the Breakdown tab's cross-vendor comparison possible. This is a
+closed classification task (fixed label set), so it's reliable to do
+in the same LLM call as field extraction rather than as a separate
+pass. Keep the taxonomy small and stable — expanding it later means
+re-classifying historical line items, which is a one-time backfill worth
+avoiding by getting the category list roughly right before Phase 1 ships.
+
 **Currency handling.** Store native currency per-invoice (already in the
 schema), no conversion at ingestion. `spend_summary` supports two modes:
 default groups and sums per-currency with no conversion (most orgs are
@@ -200,6 +281,9 @@ into stored data.
 - Accounting software integrations (QuickBooks, Xero, etc.)
 - Banking/transaction data
 - Non-Gmail email providers (Outlook/Microsoft 365 — planned next, not MVP)
+- Vendor API/OAuth connections for itemized usage data beyond what a
+  vendor's invoice PDF already contains (see "Itemization coverage"
+  section — this is a real Phase 4+ need, just not MVP)
 - Shared mailbox / delegated access flows
 - Forwarding-address ingestion for unauthenticatable aliases
 - Any write/transactional capability (paying, disputing, cancelling

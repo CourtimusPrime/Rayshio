@@ -50,6 +50,17 @@ program
   });
 
 program
+  .command('categorize')
+  .description('Backfill usage categories for invoice line items')
+  .option('--org <id>', 'org id', '1')
+  .option('--limit <n>', 'max invoices to process', '200')
+  .option('--force', 're-categorize line items that already have a category', false)
+  .action(async (opts: { org: string; limit: string; force: boolean }) => {
+    const { categorize } = await import('./commands/categorize.js');
+    await categorize({ orgId: Number(opts.org), limit: Number(opts.limit), force: opts.force });
+  });
+
+program
   .command('sync')
   .description('Run an incremental sync for all active accounts now')
   .action(async () => {
