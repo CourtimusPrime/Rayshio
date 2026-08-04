@@ -33,6 +33,20 @@ export async function processEmail(payload: JobPayloads['process-email']): Promi
 
   const msg = await fetchMessage(gmail, messageId);
 
+  // The backfill query also matches on vendor display name (the only thing a
+  // group forward preserves), which can pull in mail from a *different* service
+  // sharing that name — e.g. from:"Neon" hits both noreply@ar.neon.tech and
+  // changelog@neon.tech. Dedupe is keyed on (server_id, message_id), so without
+  // this check the same message would be ingested once per matching service.
+  const service = await db
+    .selectFrom('server.service')
+    .select('sender_address')
+    .where('id', '=', serviceId)
+    .executeTakeFirstOrThrow();
+  if (msg.from.address !== service.sender_address) {
+    return `sender mismatch (${msg.from.address} != ${service.sender_address})`;
+  }
+
   if (classifyFirst) {
     const heuristic = scoreEmail(msg);
     if (!heuristic.isCandidate) return `heuristic reject (score=${heuristic.score})`;

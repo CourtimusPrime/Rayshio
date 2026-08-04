@@ -6,6 +6,8 @@ export interface ParsedMessage {
   /** All addresses on To/Cc/Delivered-To — candidates for billing_address matching. */
   recipients: string[];
   subject: string | null;
+  /** Group/alias address the mail was routed through, null when delivered directly. */
+  deliveredVia: string | null;
   deliveredAt: Date;
   hasPdfAttachment: boolean;
   pdfAttachments: { attachmentId: string; filename: string }[];
@@ -26,6 +28,47 @@ export function parseAddress(raw: string): { name: string | null; address: strin
     return { name, address: angle[2].trim().toLowerCase() };
   }
   return { name: null, address: raw.trim().toLowerCase() };
+}
+
+/** "'OpenRouter, Inc' via Tech Team" → "OpenRouter, Inc" */
+export function cleanDisplayName(name: string | null): string | null {
+  if (!name) return null;
+  const via = name.match(/^\s*'?(.+?)'?\s+via\s+.+$/i);
+  const cleaned = (via?.[1] ?? name)
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .trim();
+  return cleaned || null;
+}
+
+/**
+ * Resolves the vendor a message actually came from.
+ *
+ * Organisations commonly route vendor invoices through a shared billing alias or
+ * Google Group (billing@, techteam@, …). The group re-sends the mail with itself
+ * as the RFC `From:` address, leaving the vendor only in the display name
+ * ("'OpenRouter, Inc' via Tech Team"). Attributing on `From` alone collapses
+ * every vendor behind one alias into a single pseudo-sender that no classifier
+ * will ever accept as a billing vendor.
+ *
+ * Google preserves the true sender in `X-Original-Sender`; its presence is the
+ * signal that a rewrite happened, so no per-org alias list is needed.
+ */
+export function resolveSender(
+  fromRaw: string,
+  originalSenderRaw: string | null,
+): { name: string | null; address: string; deliveredVia: string | null } {
+  const from = parseAddress(fromRaw);
+  const name = cleanDisplayName(from.name);
+
+  if (!originalSenderRaw) return { name, address: from.address, deliveredVia: null };
+
+  const original = parseAddress(originalSenderRaw);
+  if (!original.address.includes('@') || original.address === from.address) {
+    return { name, address: from.address, deliveredVia: null };
+  }
+  // display name still carries the vendor label; the alias becomes provenance
+  return { name: name ?? original.name, address: original.address, deliveredVia: from.address };
 }
 
 function extractAddresses(raw: string | null): string[] {
@@ -67,7 +110,7 @@ function stripHtml(html: string): string {
 /** Normalizes a full gmail messages.get (format=full) response. */
 export function parseMessage(msg: gmail_v1.Schema$Message): ParsedMessage {
   const payload = msg.payload;
-  const fromRaw = header(payload, 'From') ?? '';
+  const sender = resolveSender(header(payload, 'From') ?? '', header(payload, 'X-Original-Sender'));
   const recipients = [
     ...extractAddresses(header(payload, 'Delivered-To')),
     ...extractAddresses(header(payload, 'To')),
@@ -91,9 +134,10 @@ export function parseMessage(msg: gmail_v1.Schema$Message): ParsedMessage {
 
   return {
     messageId: msg.id ?? '',
-    from: parseAddress(fromRaw),
+    from: { name: sender.name, address: sender.address },
     recipients: [...new Set(recipients)],
     subject: header(payload, 'Subject'),
+    deliveredVia: sender.deliveredVia,
     deliveredAt: new Date(Number(msg.internalDate ?? Date.now())),
     hasPdfAttachment: pdfAttachments.length > 0,
     pdfAttachments,

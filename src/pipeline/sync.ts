@@ -30,6 +30,7 @@ export async function syncAccount(payload: JobPayloads['sync-account']): Promise
     .select(({ fn }) => [
       'server.service.id as serviceId',
       'server.service.sender_address as senderAddress',
+      'server.service.name as serviceName',
       fn.max('billing.email.delivered_at').as('newestDeliveredAt'),
     ])
     .where((eb) =>
@@ -38,17 +39,20 @@ export async function syncAccount(payload: JobPayloads['sync-account']): Promise
         eb('billing.email.id', 'is', null),
       ]),
     )
-    .groupBy(['server.service.id', 'server.service.sender_address'])
+    .groupBy(['server.service.id', 'server.service.sender_address', 'server.service.name'])
     .execute();
 
   let enqueued = 0;
   for (const service of services) {
     const after = watermarkEpochSeconds(service.newestDeliveredAt as Date | null);
-    const messages = await listAllMessages(gmail, senderQuery(service.senderAddress, after));
+    const messages = await listAllMessages(
+      gmail,
+      senderQuery(service.senderAddress, service.serviceName, after),
+    );
     for (const m of messages) {
       await enqueue(
         'process-email',
-        { accountId, serviceId: service.serviceId, messageId: m.id },
+        { accountId, serviceId: service.serviceId, messageId: m.id, classifyFirst: true },
         { jobId: `email-${service.serviceId}-${m.id}` },
       );
       enqueued += 1;

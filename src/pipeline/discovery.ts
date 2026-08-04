@@ -1,6 +1,6 @@
 import type { gmail_v1 } from 'googleapis';
 import { db } from '../db/client.js';
-import { parseAddress } from '../gmail/messages.js';
+import { resolveSender } from '../gmail/messages.js';
 import { gmailClientForAccount } from '../gmail/oauth.js';
 import { discoveryQuery, listAllMessages } from '../gmail/search.js';
 import { classifySender } from '../llm/classify.js';
@@ -21,16 +21,21 @@ interface SenderCandidate {
 async function fetchHeaderMeta(
   gmail: gmail_v1.Gmail,
   messageId: string,
-): Promise<{ from: string; subject: string | null }> {
+): Promise<{ sender: ReturnType<typeof resolveSender>; subject: string | null }> {
   const res = await gmail.users.messages.get({
     userId: 'me',
     id: messageId,
     format: 'metadata',
-    metadataHeaders: ['From', 'Subject'],
+    // X-Original-Sender carries the real vendor when a billing alias or Google
+    // Group re-sent the mail — without it every such vendor looks like the alias
+    metadataHeaders: ['From', 'Subject', 'X-Original-Sender'],
   });
   const headers = res.data.payload?.headers ?? [];
   const get = (n: string) => headers.find((h) => h.name?.toLowerCase() === n.toLowerCase())?.value;
-  return { from: get('From') ?? '', subject: get('Subject') ?? null };
+  return {
+    sender: resolveSender(get('From') ?? '', get('X-Original-Sender') ?? null),
+    subject: get('Subject') ?? null,
+  };
 }
 
 /**
@@ -42,7 +47,7 @@ export async function discoverSenders(
   payload: JobPayloads['discover-senders'] & { sinceEpochSeconds?: number },
 ): Promise<string> {
   const { accountId, sinceEpochSeconds } = payload;
-  const { gmail } = await gmailClientForAccount(accountId);
+  const { gmail, account } = await gmailClientForAccount(accountId);
 
   const query = sinceEpochSeconds
     ? `${discoveryQuery()} after:${sinceEpochSeconds}`
@@ -52,9 +57,9 @@ export async function discoverSenders(
   const candidates = new Map<string, SenderCandidate>();
   for (const ref of refs) {
     const meta = await fetchHeaderMeta(gmail, ref.id);
-    if (!meta.from) continue;
-    const from = parseAddress(meta.from);
-    const existing = candidates.get(from.address) ?? {
+    const from = meta.sender;
+    if (!from.address) continue;
+    const existing: SenderCandidate = candidates.get(from.address) ?? {
       address: from.address,
       name: from.name,
       subjects: [],
@@ -74,11 +79,33 @@ export async function discoverSenders(
     ),
   );
 
+  /**
+   * The org's own addresses are never vendors. Without this guard, mail the user
+   * forwards to themselves or to a bookkeeping tool — which carries genuine
+   * invoice subjects — looks exactly like a high-volume billing sender, and
+   * ingesting it would duplicate every invoice already captured from the vendor.
+   */
+  const ownAddresses = new Set<string>([
+    account.email_address.toLowerCase(),
+    ...(
+      await db
+        .selectFrom('client.billing_address')
+        .select('address')
+        .where('org_id', '=', account.org_id)
+        .execute()
+    ).map((a) => a.address.toLowerCase()),
+  ]);
+
   let confirmed = 0;
   let skippedKnown = 0;
+  let skippedOwn = 0;
   for (const candidate of candidates.values()) {
     if (knownSenders.has(candidate.address)) {
       skippedKnown += 1;
+      continue;
+    }
+    if (ownAddresses.has(candidate.address)) {
+      skippedOwn += 1;
       continue;
     }
 
@@ -127,5 +154,5 @@ export async function discoverSenders(
     confirmed += 1;
   }
 
-  return `scanned ${refs.length} messages, ${candidates.size} senders, ${confirmed} new billing senders (${skippedKnown} already known)`;
+  return `scanned ${refs.length} messages, ${candidates.size} senders, ${confirmed} new billing senders (${skippedKnown} already known, ${skippedOwn} own addresses)`;
 }
