@@ -44,6 +44,8 @@ app.delete('/mcp', (_req, res) => {
   res.status(405).set('Allow', 'POST').send();
 });
 
-app.listen(config.MCP_PORT, () => {
-  console.log(`invoice-mcp listening on :${config.MCP_PORT} (POST /mcp)`);
+// Railway injects PORT; MCP_PORT is the local-dev fallback
+const port = Number(process.env.PORT ?? config.MCP_PORT);
+app.listen(port, () => {
+  console.log(`invoice-mcp listening on :${port} (POST /mcp)`);
 });
