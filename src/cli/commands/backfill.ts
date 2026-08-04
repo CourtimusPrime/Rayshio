@@ -4,7 +4,7 @@ export async function backfill(accountId: number, serviceId: number): Promise<vo
   await enqueue(
     'backfill-sender',
     { accountId, serviceId },
-    { jobId: `backfill:${accountId}:${serviceId}` },
+    { jobId: `backfill-${accountId}-${serviceId}` },
   );
   console.log(`enqueued backfill for service ${serviceId} (account ${accountId})`);
   await ingestionQueue().close();

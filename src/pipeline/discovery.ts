@@ -122,7 +122,7 @@ export async function discoverSenders(
     await enqueue(
       'backfill-sender',
       { accountId, serviceId },
-      { jobId: `backfill:${accountId}:${serviceId}` },
+      { jobId: `backfill-${accountId}-${serviceId}` },
     );
     confirmed += 1;
   }

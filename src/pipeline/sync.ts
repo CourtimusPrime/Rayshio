@@ -49,7 +49,7 @@ export async function syncAccount(payload: JobPayloads['sync-account']): Promise
       await enqueue(
         'process-email',
         { accountId, serviceId: service.serviceId, messageId: m.id },
-        { jobId: `email:${service.serviceId}:${m.id}` },
+        { jobId: `email-${service.serviceId}-${m.id}` },
       );
       enqueued += 1;
     }

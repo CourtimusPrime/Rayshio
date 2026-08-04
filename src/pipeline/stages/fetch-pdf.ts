@@ -46,7 +46,7 @@ export async function fetchPdf(payload: JobPayloads['fetch-pdf']): Promise<strin
   await enqueue(
     'extract-invoice',
     { accountId, invoiceId, messageId },
-    { jobId: `extract:${invoiceId}`, attempts: 2 },
+    { jobId: `extract-${invoiceId}`, attempts: 2 },
   );
   return result;
 }

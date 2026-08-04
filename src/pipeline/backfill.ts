@@ -20,7 +20,7 @@ export async function backfillSender(payload: JobPayloads['backfill-sender']): P
     await enqueue(
       'process-email',
       { accountId, serviceId, messageId: m.id },
-      { jobId: `email:${serviceId}:${m.id}` },
+      { jobId: `email-${serviceId}-${m.id}` },
     );
   }
   return `enqueued ${messages.length} messages from ${service.sender_address}`;

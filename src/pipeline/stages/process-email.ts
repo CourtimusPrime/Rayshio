@@ -116,7 +116,7 @@ export async function processEmail(payload: JobPayloads['process-email']): Promi
   await enqueue(
     'fetch-pdf',
     { accountId, invoiceId: invoice.id, messageId },
-    { jobId: `fetch-pdf:${invoice.id}` },
+    { jobId: `fetch-pdf-${invoice.id}` },
   );
   return `invoice ${invoice.id} classified`;
 }
