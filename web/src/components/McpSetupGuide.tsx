@@ -168,7 +168,7 @@ export function McpSetupGuide() {
           role="tabpanel"
           id={`panel-${active.id}`}
           aria-labelledby={`tab-${active.id}`}
-          className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+          className="clip-card rounded-xl border border-line bg-surface shadow-card"
         >
           <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
             <div>

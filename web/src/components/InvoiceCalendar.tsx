@@ -70,7 +70,7 @@ export function InvoiceCalendar() {
   return (
     <section
       aria-labelledby="calendar-heading"
-      className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+      className="clip-card rounded-xl border border-line bg-surface shadow-card"
     >
       <div className="flex flex-wrap items-center gap-4 px-5 py-4 md:px-6">
         <div>

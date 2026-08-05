@@ -30,7 +30,7 @@ export function CategoryDetailList() {
   return (
     <section
       aria-labelledby="category-detail-heading"
-      className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+      className="clip-card rounded-xl border border-line bg-surface shadow-card"
     >
       <div className="px-5 py-4 md:px-6">
         <h2 id="category-detail-heading" className="text-body font-medium text-ink-900">

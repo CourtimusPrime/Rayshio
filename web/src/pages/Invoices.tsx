@@ -43,7 +43,7 @@ export function Invoices() {
   const [selected, setSelected] = useState<number | null>(null);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+    <section className="clip-card rounded-xl border border-line bg-surface shadow-card">
       <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
         <div>
           <h2 className="text-body font-medium text-ink-900">All invoices</h2>

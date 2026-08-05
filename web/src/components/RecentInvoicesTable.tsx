@@ -18,7 +18,7 @@ export function RecentInvoicesTable({ title = 'Recent invoices', limit = 6 }) {
   return (
     <section
       aria-labelledby="recent-invoices-heading"
-      className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+      className="clip-card rounded-xl border border-line bg-surface shadow-card"
     >
       <div className="flex items-center justify-between gap-4 px-5 py-4 md:px-6">
         <div>

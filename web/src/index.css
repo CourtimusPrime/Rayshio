@@ -101,6 +101,15 @@
   --dur-slow: 320ms;
 
   /*
+   * A keyline in the surface colour, then the ring. The keyline is what makes
+   * this readable on *any* background — a bare accent outline disappears
+   * against the accent-soft fill the active nav item and both tablists use.
+   * Painting order does the work: an outer box-shadow paints below the
+   * element's own background, so the ring never covers content.
+   */
+  --ring-focus: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--accent));
+
+  /*
    * A scrim dims, so it cannot be --ink-900: that inverts with the theme, and
    * in dark it is near-white — a wash that lightens the page instead of pushing
    * it back. Dark in both themes, deeper in dark because there is less contrast
@@ -167,6 +176,10 @@
   --material-chrome-bg: rgb(var(--surface) / 0.66);
   --material-sheet-bg: rgb(var(--surface) / 0.92);
   --material-rim: rgb(255 255 255 / 0.08);
+
+  /* --accent in dark sits too close to the surface to read as a ring;
+     --accent-strong is the light mint that is only ever used as foreground. */
+  --ring-focus: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--accent-strong));
 
   --chart-grid: 38 38 44; /* #26262c */
   --chart-cursor: 30 30 36; /* #1e1e24 */
@@ -310,10 +323,42 @@
     font-feature-settings: 'tnum';
   }
 
+  /*
+   * Clips children to the card's radius without shearing focus rings.
+   * `overflow: hidden` clips the ring off any control flush to the card edge —
+   * which is every accordion header and every table row. `overflow: clip` clips
+   * identically but honours overflow-clip-margin, so painting can escape by a
+   * fixed distance. 6px covers the 2px keyline plus the 2px ring.
+   *
+   * Progressive enhancement: engines without clip-margin fall back to today's
+   * behaviour rather than breaking.
+   */
+  .clip-card {
+    overflow: clip;
+    overflow-clip-margin: 6px;
+  }
+
 }
-*:focus-visible {
-  outline: 2px solid rgb(var(--accent));
-  outline-offset: 2px;
+@layer base {
+  /*
+   * Scoped to things that are actually interactive rather than `*`, and wrapped
+   * in :where() so it carries zero specificity — any component can override it
+   * without reaching for !important.
+   *
+   * The outline stays, transparent, purely so Windows High Contrast has
+   * something to repaint; box-shadow is not rendered in forced-colours mode.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--ring-focus);
+  }
+
+  @media (forced-colors: active) {
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+      outline-color: Highlight;
+    }
+  }
 }
 
 /*
