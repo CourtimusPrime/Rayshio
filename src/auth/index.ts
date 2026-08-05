@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import pg from 'pg';
-import { config, requireConfig } from '../config.js';
+import { config, requireConfig, trustedOrigins } from '../config.js';
 import { acceptInvitation, pendingInvitationFor } from './memberships.js';
 
 /**
@@ -52,7 +52,7 @@ export const auth = betterAuth({
   baseURL: config.PUBLIC_APP_URL,
   secret: auth_secret,
   database: authPool,
-  trustedOrigins: [config.PUBLIC_APP_URL],
+  trustedOrigins,
 
   // `imcp`, not `rayshio`: the cookie prefix is a published contract, same as
   // the /mcp endpoint and MCP_API_KEY. Renaming it signs everyone out.

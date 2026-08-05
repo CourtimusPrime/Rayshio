@@ -93,6 +93,29 @@ export const config: Config = (() => {
   return parsed.data;
 })();
 
+/**
+ * Origins allowed to make state-changing requests: Better Auth's own
+ * `trustedOrigins`, and the same-origin check on the rest of `/api`.
+ *
+ * The dev entries are why this exists. `pnpm dev:web` serves the SPA from
+ * :5173 and proxies `/api` to :3000, and while that proxy rewrites the `Host`
+ * header it forwards `Origin: http://localhost:5173` unchanged — correctly, as
+ * the request really does originate there. With only `PUBLIC_APP_URL` trusted,
+ * every sign-in and every PATCH from the dev server is rejected with
+ * "Invalid origin".
+ *
+ * Empty in production, where the SPA and the API are one origin, so the dev
+ * ports are never trusted on a deployed instance.
+ */
+export const trustedOrigins: string[] = [
+  ...new Set([
+    config.PUBLIC_APP_URL,
+    ...(process.env.NODE_ENV === 'production'
+      ? []
+      : ['http://localhost:5173', 'http://localhost:3000']),
+  ]),
+];
+
 /** Throws unless the named optional vars are present; returns them non-nullable. */
 export function requireConfig<K extends keyof Config>(
   ...keys: K[]

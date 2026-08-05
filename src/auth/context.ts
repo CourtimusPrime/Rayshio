@@ -1,7 +1,7 @@
 import { fromNodeHeaders } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
 import { hasSession } from '../api/session.js';
-import { config } from '../config.js';
+import { config, trustedOrigins } from '../config.js';
 import { auth } from './index.js';
 import { type OrgRole, resolveActiveOrg, roleSatisfies } from './memberships.js';
 
@@ -101,7 +101,7 @@ export function requireSameOrigin(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  const allowed = new Set([config.PUBLIC_APP_URL, `${req.protocol}://${req.get('host') ?? ''}`]);
+  const allowed = new Set([...trustedOrigins, `${req.protocol}://${req.get('host') ?? ''}`]);
   if (!allowed.has(origin)) {
     res.status(403).json({ error: 'cross-origin request rejected' });
     return;
