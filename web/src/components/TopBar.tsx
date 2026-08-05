@@ -11,7 +11,7 @@ import { useLogout } from '../api/hooks';
 import { useWorkspace } from '../state/workspace';
 import { longMonthLabel } from '../utils/format';
 
-export function TopBar({ title }: { title: string }) {
+export function TopBar({ title, scrolled = false }: { title: string; scrolled?: boolean }) {
   const { meta, currency, setCurrency, currencies, month, setMonth, months } = useWorkspace();
   const [term, setTerm] = useState('');
   const navigate = useNavigate();
@@ -28,10 +28,18 @@ export function TopBar({ title }: { title: string }) {
   const nextMonth = index > 0 ? months[index - 1]?.month : undefined;
 
   return (
-    <header className="flex flex-wrap items-center gap-4 border-b border-line bg-surface/90 px-5 py-4 backdrop-blur md:px-8">
+    <header
+      data-scrolled={scrolled ? 'true' : 'false'}
+      className="material-chrome sticky top-0 z-chrome flex flex-wrap items-center gap-4 px-5 py-4 md:px-8"
+    >
       <div className="min-w-0">
         <h1 className="truncate text-title3 font-semibold text-ink-900">{title}</h1>
-        <p className="mt-0.5 text-caption text-ink-500">{meta?.org.name ?? '—'} · workspace</p>
+        {/* a shade heavier than the rest of the secondary text: flat grey loses
+            legibility over a translucent surface, and weight is the fix that
+            does not put colour on the see-through layer */}
+        <p className="mt-0.5 text-caption font-medium text-ink-500">
+          {meta?.org.name ?? '—'} · workspace
+        </p>
       </div>
 
       {/* wraps as a group: month nav + currency + account exceed a phone width on one line */}

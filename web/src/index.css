@@ -109,6 +109,25 @@
   --scrim: 24 24 28;
   --scrim-opacity: 0.32;
 
+  /*
+   * Materials. Translucency is only honest where something actually passes
+   * behind the surface — that is the top bar, the scrim, and the drawer. The
+   * sidebar is a side-by-side flex sibling with nothing ever behind it, so it
+   * uses the same vocabulary while staying opaque; blurring a flat colour costs
+   * a compositor layer and buys nothing.
+   *
+   * The sheet sits at 0.94 deliberately. It is a translucent surface over an
+   * already-blurred scrim, and stacking two light materials destroys legibility
+   * — at 6% the blur reads as a hint of depth and nothing more.
+   */
+  --material-blur: 24px;
+  --material-blur-heavy: 30px;
+  --material-sat: 180%;
+  --material-chrome-bg: rgb(var(--surface) / 0.72);
+  --material-sheet-bg: rgb(var(--surface) / 0.94);
+  /* light catching the edge of the material */
+  --material-rim: rgb(255 255 255 / 0.55);
+
   /* consumed by the charts, which take colours as props rather than classes */
   --chart-accent: var(--accent);
   --chart-grid: 242 242 245; /* #f2f2f5 */
@@ -145,6 +164,10 @@
   --scrim: 0 0 0;
   --scrim-opacity: 0.55;
 
+  --material-chrome-bg: rgb(var(--surface) / 0.66);
+  --material-sheet-bg: rgb(var(--surface) / 0.92);
+  --material-rim: rgb(255 255 255 / 0.08);
+
   --chart-grid: 38 38 44; /* #26262c */
   --chart-cursor: 30 30 36; /* #1e1e24 */
   --chart-axis: 116 116 125; /* #74747d */
@@ -177,6 +200,105 @@
   }
 }
 
+@layer components {
+  /*
+   * Floating chrome: content scrolls underneath it. The bottom border is
+   * declared transparent up front so the scroll edge appearing does not shift
+   * anything by a pixel.
+   */
+  .material-chrome {
+    background-color: var(--material-chrome-bg);
+    -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-sat));
+    backdrop-filter: blur(var(--material-blur)) saturate(var(--material-sat));
+    border-bottom: 1px solid transparent;
+    transition:
+      border-color var(--dur-base) var(--ease-standard),
+      box-shadow var(--dur-base) var(--ease-standard);
+  }
+  /*
+   * The scroll edge, not a permanent divider: it appears only once content is
+   * actually underneath the bar, so at rest the chrome has no seam at all.
+   */
+  .material-chrome[data-scrolled='true'] {
+    border-bottom-color: rgb(var(--line));
+    box-shadow: var(--shadow-edge);
+  }
+
+  /* Structural region. Opaque, but same vocabulary — one line from translucent. */
+  .material-rail {
+    background-color: rgb(var(--surface));
+    border-bottom: 1px solid rgb(var(--line));
+    box-shadow: inset 0 1px 0 0 var(--material-rim);
+  }
+  @media (min-width: 768px) {
+    .material-rail {
+      border-bottom: 0;
+      border-right: 1px solid rgb(var(--line));
+      box-shadow: inset 1px 0 0 0 var(--material-rim);
+    }
+  }
+
+  .material-sheet {
+    background-color: var(--material-sheet-bg);
+    -webkit-backdrop-filter: blur(var(--material-blur-heavy)) saturate(var(--material-sat));
+    backdrop-filter: blur(var(--material-blur-heavy)) saturate(var(--material-sat));
+    box-shadow: var(--shadow-e4);
+    border-left: 1px solid var(--material-rim);
+  }
+
+  .material-scrim {
+    background-color: rgb(var(--scrim) / var(--scrim-opacity));
+    -webkit-backdrop-filter: blur(8px) saturate(105%);
+    backdrop-filter: blur(8px) saturate(105%);
+  }
+}
+
+/*
+ * When the user asks for less transparency, materials become solid rather than
+ * frostier — and the chrome's border becomes permanent, because without
+ * translucency the scroll edge no longer communicates overlap on its own.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  .material-chrome,
+  .material-sheet {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .material-chrome {
+    border-bottom-color: rgb(var(--line));
+  }
+  .material-scrim {
+    background-color: rgb(var(--scrim) / 0.7);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .material-chrome,
+  .material-sheet,
+  .material-rail {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: rgb(var(--ink-900) / 0.45);
+  }
+}
+
+/* Older engines get a near-solid surface rather than an unreadable wash. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .material-chrome {
+    background-color: rgb(var(--surface) / 0.97);
+  }
+  .material-sheet {
+    background-color: rgb(var(--surface));
+  }
+  .material-scrim {
+    background-color: rgb(var(--scrim) / 0.65);
+  }
+}
+
 @layer utilities {
   /*
    * The system font ships proportional figures, so without this every animated
@@ -188,14 +310,6 @@
     font-feature-settings: 'tnum';
   }
 
-  /*
-   * Modal dimming. A class rather than a Tailwind colour because the opacity is
-   * itself a themed token — dark needs a deeper scrim than light, and an opacity
-   * modifier in the class name could not vary with the theme.
-   */
-  .scrim {
-    background-color: rgb(var(--scrim) / var(--scrim-opacity));
-  }
 }
 *:focus-visible {
   outline: 2px solid rgb(var(--accent));

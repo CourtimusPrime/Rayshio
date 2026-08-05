@@ -26,7 +26,7 @@ export function Sidebar() {
   const endpoint = meta?.mcp_endpoint.replace(/^https?:\/\//, '');
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-surface md:h-full md:w-60 md:border-b-0 md:border-r">
+    <aside className="material-rail relative z-sidebar flex w-full shrink-0 flex-col md:h-full md:w-60">
       <div className="flex items-center gap-2.5 px-5 py-5">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-footnote font-semibold text-canvas">
           iM

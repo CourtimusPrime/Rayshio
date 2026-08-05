@@ -12,6 +12,7 @@ import { Login } from './pages/Login';
 import { Mcp } from './pages/Mcp';
 import { Reports } from './pages/Reports';
 import { WorkspaceProvider, useWorkspace } from './state/workspace';
+import { useScrollEdge } from './utils/useScrollEdge';
 
 const titles: Record<string, string> = {
   '/': 'Dashboard',
@@ -47,14 +48,28 @@ function Shell() {
   const { currency, month, months } = useWorkspace();
   // warm every month in the background so paging between them is instant
   useMonthPrefetch(currency, month, months);
+  const { sentinel, atTop } = useScrollEdge();
 
   return (
     <div className="flex min-h-full w-full flex-col bg-surface md:h-full md:flex-row">
       <Sidebar />
 
-      <div className="flex min-w-0 flex-1 flex-col md:h-full md:overflow-hidden">
-        <TopBar title={titles[pathname] ?? 'Dashboard'} />
-        <main className="flex-1 bg-canvas px-5 py-6 md:overflow-y-auto md:px-8 md:py-8">
+      {/*
+        This div, not <main>, is the desktop scroll container. The top bar is a
+        translucent material with content passing under it, and sticky only
+        resolves against an ancestor scroller — as a sibling of <main> the bar
+        could never stick to anything. `bg-canvas` has to live here too, or the
+        strip behind the translucent bar shows the shell's surface colour.
+      */}
+      <div
+        data-scroll-container
+        className="flex min-w-0 flex-1 flex-col bg-canvas md:h-full md:overflow-y-auto"
+      >
+        {/* 1px so it has a real box for the observer, negative-margined back so
+            it costs no layout and leaves no strip above the bar */}
+        <div ref={sentinel} aria-hidden="true" className="-mb-px h-px shrink-0" />
+        <TopBar title={titles[pathname] ?? 'Dashboard'} scrolled={!atTop} />
+        <main className="flex-1 px-5 py-6 md:px-8 md:py-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/breakdown" element={<Breakdown />} />

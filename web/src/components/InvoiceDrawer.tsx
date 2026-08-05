@@ -34,7 +34,7 @@ export function InvoiceDrawer({
     <AnimatePresence>
       {invoiceId !== null && (
         <motion.div
-          className="scrim fixed inset-0 z-40 flex justify-end"
+          className="material-scrim fixed inset-0 z-scrim flex justify-end"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -44,7 +44,7 @@ export function InvoiceDrawer({
             role="dialog"
             aria-modal="true"
             aria-label="Invoice detail"
-            className="flex h-full w-full max-w-lg flex-col overflow-y-auto bg-surface shadow-pop"
+            className="material-sheet flex h-full w-full max-w-lg flex-col overflow-y-auto"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
