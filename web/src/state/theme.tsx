@@ -19,6 +19,23 @@ const STORAGE_KEY = 'invoicemcp.theme';
 /** How long the one-shot colour cross-fade below runs for. */
 const THEME_FADE_MS = 260;
 
+export interface ChartColors {
+  accent: string;
+  barMuted: string;
+  grid: string;
+  cursor: string;
+  axisTick: string;
+  labelTick: string;
+  tooltip: {
+    borderRadius: number;
+    border: string;
+    background: string;
+    color: string;
+    boxShadow: string;
+    fontSize: number;
+  };
+}
+
 interface ThemeValue {
   /** What the user chose, including 'system'. */
   preference: ThemePreference;
@@ -27,6 +44,42 @@ interface ThemeValue {
   setPreference: (preference: ThemePreference) => void;
   /** Cycles light → dark → system. */
   cycle: () => void;
+  /** Resolved from CSS for the current theme; see readChartColors. */
+  chart: ChartColors;
+}
+
+/**
+ * Recharts takes colours as props rather than classes, so it cannot read the
+ * CSS variables the rest of the UI uses. Rather than restate the palette in TS
+ * — which is how the chart accent silently drifted from the UI accent in dark —
+ * read the resolved custom properties back off <html>.
+ *
+ * One getComputedStyle call, not one per token: it is the expensive half.
+ */
+function readChartColors(): ChartColors {
+  const style = getComputedStyle(document.documentElement);
+  /** Palette variables are channel triplets; SVG attributes want a colour. */
+  const colour = (name: string) => {
+    const raw = style.getPropertyValue(name).trim();
+    return raw ? `rgb(${raw.split(/\s+/).join(', ')})` : 'transparent';
+  };
+
+  return {
+    accent: colour('--chart-accent'),
+    barMuted: colour('--chart-bar-muted'),
+    grid: colour('--chart-grid'),
+    cursor: colour('--chart-cursor'),
+    axisTick: colour('--chart-axis'),
+    labelTick: colour('--chart-tick'),
+    tooltip: {
+      borderRadius: Number.parseInt(style.getPropertyValue('--radius-lg'), 10) || 10,
+      border: `1px solid ${colour('--line-strong')}`,
+      background: colour('--surface'),
+      color: colour('--ink-900'),
+      boxShadow: style.getPropertyValue('--shadow-e3').trim(),
+      fontSize: 12,
+    },
+  };
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null);
@@ -67,11 +120,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
    * it off again. The first run is skipped — that is the pre-paint script's
    * class being confirmed, not a change the user made.
    */
+  const [chart, setChart] = useState<ChartColors>(readChartColors);
+
   const isFirstRun = useRef(true);
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('dark', theme === 'dark');
     root.style.colorScheme = theme;
+
+    // after the class, so the resolved values are the new theme's. A state
+    // update inside a layout effect re-renders before paint, so the charts
+    // never draw a frame with the old palette.
+    setChart(readChartColors());
 
     if (isFirstRun.current) {
       isFirstRun.current = false;
@@ -96,8 +156,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [preference, setPreference]);
 
   const value = useMemo(
-    () => ({ preference, theme, setPreference, cycle }),
-    [preference, theme, setPreference, cycle],
+    () => ({ preference, theme, setPreference, cycle, chart }),
+    [preference, theme, setPreference, cycle, chart],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -109,31 +169,7 @@ export function useTheme(): ThemeValue {
   return value;
 }
 
-/**
- * Recharts takes colours as props, not classes, so it cannot read the CSS
- * variables the rest of the UI uses. These mirror the two palettes in index.css
- * — keep them in step when either changes.
- */
-export function useChartColors() {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
-  return useMemo(
-    () => ({
-      accent: dark ? '#2aa79b' : '#0f766e',
-      barMuted: dark ? '#1f4d48' : '#cfe4e2',
-      grid: dark ? '#26262c' : '#f2f2f5',
-      cursor: dark ? '#1e1e24' : '#fafafa',
-      axisTick: dark ? '#74747d' : '#9b9ba3',
-      labelTick: dark ? '#9a9aa3' : '#71717a',
-      tooltip: {
-        borderRadius: 10,
-        border: `1px solid ${dark ? '#33333b' : '#ececf0'}`,
-        background: dark ? '#17171b' : '#ffffff',
-        color: dark ? '#f2f2f4' : '#1c1c20',
-        boxShadow: dark ? '0 6px 24px rgba(0,0,0,0.5)' : '0 6px 24px rgba(24,24,28,0.08)',
-        fontSize: 12,
-      } as const,
-    }),
-    [dark],
-  );
+/** The chart palette for the current theme, resolved from CSS. */
+export function useChartColors(): ChartColors {
+  return useTheme().chart;
 }
