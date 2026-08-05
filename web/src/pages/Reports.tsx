@@ -131,229 +131,241 @@ export function Reports() {
         </div>
       </section>
 
-      {error && (
-        <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
-          <ErrorNote message={error.message} />
-        </section>
-      )}
+      {/* the panel the tabs control; everything below reflects the selected
+          period type */}
+      <div
+        id="report-panel"
+        role="tabpanel"
+        aria-labelledby={`report-tab-${type}`}
+        tabIndex={0}
+        className="space-y-6"
+      >
+        {error && (
+          <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6">
+            <ErrorNote message={error.message} />
+          </section>
+        )}
 
-      {!error && (isPending || !data || !currency) && <LoadingBlock className="h-64" />}
+        {!error && (isPending || !data || !currency) && <LoadingBlock className="h-64" />}
 
-      {!error && data && currency && (
-        <>
-          <section
-            aria-labelledby="report-total-heading"
-            className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 id="report-total-heading" className="text-body font-medium text-ink-500">
-                  Total spend · {data.period.label}
-                </h2>
-                <p className="tnum mt-2 text-display font-semibold text-ink-900">
-                  <AnimatedCurrency value={data.current_total_minor} currency={currency} />
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2.5 py-1 text-caption font-medium text-ink-500">
-                {delta === null ? 'no prior period' : formatPercent(delta)}
-              </span>
-            </div>
-
-            <p className="mt-2 text-footnote text-ink-500">
-              <span className="tnum text-ink-700">
-                <AnimatedCurrency value={data.previous_total_minor} currency={currency} />
-              </span>{' '}
-              in {data.previous_period.label}
-            </p>
-
-            <ChartFigure
-              className="mt-5 h-40"
-              label={`Spend by ${type === 'quarter' ? 'quarter' : 'year'}`}
-              summary={data.trend
-                .map((t) => `${t.label} ${formatCurrency(t.total_minor, currency)}`)
-                .join(', ')}
+        {!error && data && currency && (
+          <>
+            <section
+              aria-labelledby="report-total-heading"
+              className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.trend} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
-                  <CartesianGrid stroke={chart.grid} vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: chart.labelTick, fontSize: 12 }}
-                    dy={6}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: chart.axisTick, fontSize: 11 }}
-                    tickFormatter={(value: number) => formatCurrency(value, currency, true)}
-                  />
-                  <Tooltip
-                    cursor={{ fill: chart.cursor }}
-                    contentStyle={chart.tooltip}
-                    formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
-                  />
-                  <Bar
-                    dataKey="total_minor"
-                    radius={[6, 6, 0, 0]}
-                    fill={chart.accent}
-                    {...chartMotion}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFigure>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="report-total-heading" className="text-body font-medium text-ink-500">
+                    Total spend · {data.period.label}
+                  </h2>
+                  <p className="tnum mt-2 text-display font-semibold text-ink-900">
+                    <AnimatedCurrency value={data.current_total_minor} currency={currency} />
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2.5 py-1 text-caption font-medium text-ink-500">
+                  {delta === null ? 'no prior period' : formatPercent(delta)}
+                </span>
+              </div>
 
-            <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
-              <div>
-                <dt className="text-micro uppercase tracking-wide text-ink-400">Invoices</dt>
-                <dd className="tnum mt-1 text-body font-medium text-ink-900">
-                  <AnimatedCount value={data.invoice_count} />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro uppercase tracking-wide text-ink-400">Services</dt>
-                <dd className="tnum mt-1 text-body font-medium text-ink-900">
-                  <AnimatedCount value={data.service_count} />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro uppercase tracking-wide text-ink-400">Avg / invoice</dt>
-                <dd className="tnum mt-1 text-body font-medium text-ink-900">
-                  {data.invoice_count === 0 ? (
-                    '—'
-                  ) : (
-                    <AnimatedCurrency
-                      value={Math.round(data.current_total_minor / data.invoice_count)}
-                      currency={currency}
+              <p className="mt-2 text-footnote text-ink-500">
+                <span className="tnum text-ink-700">
+                  <AnimatedCurrency value={data.previous_total_minor} currency={currency} />
+                </span>{' '}
+                in {data.previous_period.label}
+              </p>
+
+              <ChartFigure
+                className="mt-5 h-40"
+                label={`Spend by ${type === 'quarter' ? 'quarter' : 'year'}`}
+                summary={data.trend
+                  .map((t) => `${t.label} ${formatCurrency(t.total_minor, currency)}`)
+                  .join(', ')}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.trend} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
+                    <CartesianGrid stroke={chart.grid} vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: chart.labelTick, fontSize: 12 }}
+                      dy={6}
                     />
-                  )}
-                </dd>
-              </div>
-            </dl>
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: chart.axisTick, fontSize: 11 }}
+                      tickFormatter={(value: number) => formatCurrency(value, currency, true)}
+                    />
+                    <Tooltip
+                      cursor={{ fill: chart.cursor }}
+                      contentStyle={chart.tooltip}
+                      formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
+                    />
+                    <Bar
+                      dataKey="total_minor"
+                      radius={[6, 6, 0, 0]}
+                      fill={chart.accent}
+                      {...chartMotion}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartFigure>
 
-            <ConversionNote meta={data.conversion} />
-          </section>
-
-          <section
-            aria-labelledby="report-vendors-heading"
-            className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
-          >
-            <h2 id="report-vendors-heading" className="text-body font-medium text-ink-900">
-              Top vendors by spend
-            </h2>
-            <p className="mt-1 text-caption text-ink-500">
-              {data.period.rangeLabel}, parsed invoices only
-            </p>
-
-            <div className="mt-5">
-              {services.length === 0 ? (
-                <EmptyNote message="No invoices in this period." />
-              ) : (
-                <ChartFigure
-                  className="h-56"
-                  label="Top vendors by spend this period"
-                  summary={services
-                    .map((v) => `${v.service} ${formatCurrency(v.total_minor, currency)}`)
-                    .join('; ')}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={services}
-                      margin={{ top: 8, right: 4, bottom: 0, left: -12 }}
-                      barSize={26}
-                    >
-                      <CartesianGrid stroke={chart.grid} vertical={false} />
-                      <XAxis
-                        dataKey="service"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: chart.labelTick, fontSize: 12 }}
-                        dy={6}
+              <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-ink-400">Invoices</dt>
+                  <dd className="tnum mt-1 text-body font-medium text-ink-900">
+                    <AnimatedCount value={data.invoice_count} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-ink-400">Services</dt>
+                  <dd className="tnum mt-1 text-body font-medium text-ink-900">
+                    <AnimatedCount value={data.service_count} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-ink-400">Avg / invoice</dt>
+                  <dd className="tnum mt-1 text-body font-medium text-ink-900">
+                    {data.invoice_count === 0 ? (
+                      '—'
+                    ) : (
+                      <AnimatedCurrency
+                        value={Math.round(data.current_total_minor / data.invoice_count)}
+                        currency={currency}
                       />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: chart.axisTick, fontSize: 11 }}
-                        tickFormatter={(value: number) => formatCurrency(value, currency, true)}
-                      />
-                      <Tooltip
-                        cursor={{ fill: chart.cursor }}
-                        contentStyle={chart.tooltip}
-                        formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
-                      />
-                      <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
-                        {services.map((entry) => (
-                          <Cell
-                            key={entry.service}
-                            fill={entry.total_minor === maxService ? chart.accent : chart.barMuted}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartFigure>
-              )}
-            </div>
-          </section>
+                    )}
+                  </dd>
+                </div>
+              </dl>
 
-          <section
-            aria-labelledby="report-categories-heading"
-            className="clip-card rounded-xl border border-line bg-surface shadow-card"
-          >
-            <div className="px-5 py-4 md:px-6">
-              <h2 id="report-categories-heading" className="text-body font-medium text-ink-900">
-                Spend by category
+              <ConversionNote meta={data.conversion} />
+            </section>
+
+            <section
+              aria-labelledby="report-vendors-heading"
+              className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
+            >
+              <h2 id="report-vendors-heading" className="text-body font-medium text-ink-900">
+                Top vendors by spend
               </h2>
               <p className="mt-1 text-caption text-ink-500">
-                Rolled up across every vendor for {data.period.label}
+                {data.period.rangeLabel}, parsed invoices only
               </p>
-            </div>
 
-            {categories.length === 0 ? (
-              <div className="px-5 pb-5 md:px-6">
-                <EmptyNote message="No categorized spend in this period." />
-              </div>
-            ) : (
-              <ul className="border-t border-line">
-                {categories.map((category) => (
-                  <li key={category.category} className="border-b border-line last:border-b-0">
-                    <div className="flex items-center gap-3 px-5 py-3.5 md:px-6">
-                      <span
-                        className="h-8 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: categoryColors[category.category] }}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-footnote font-medium text-ink-900">
-                          {categoryLabel(category.category)}
-                        </span>
-                        <span className="tnum mt-0.5 block text-caption text-ink-500">
-                          {category.services.length} vendors ·{' '}
-                          {categoryTotal === 0
-                            ? 0
-                            : Math.round((category.total_minor / categoryTotal) * 100)}
-                          % of spend
-                        </span>
-                      </span>
-                      <span className="ml-auto flex items-center gap-3">
-                        <span className="hidden items-center gap-1 sm:flex">
-                          {category.services.slice(0, 4).map((s) => (
-                            <ServiceLogo key={s.service} name={s.service} />
+              <div className="mt-5">
+                {services.length === 0 ? (
+                  <EmptyNote message="No invoices in this period." />
+                ) : (
+                  <ChartFigure
+                    className="h-56"
+                    label="Top vendors by spend this period"
+                    summary={services
+                      .map((v) => `${v.service} ${formatCurrency(v.total_minor, currency)}`)
+                      .join('; ')}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={services}
+                        margin={{ top: 8, right: 4, bottom: 0, left: -12 }}
+                        barSize={26}
+                      >
+                        <CartesianGrid stroke={chart.grid} vertical={false} />
+                        <XAxis
+                          dataKey="service"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: chart.labelTick, fontSize: 12 }}
+                          dy={6}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: chart.axisTick, fontSize: 11 }}
+                          tickFormatter={(value: number) => formatCurrency(value, currency, true)}
+                        />
+                        <Tooltip
+                          cursor={{ fill: chart.cursor }}
+                          contentStyle={chart.tooltip}
+                          formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
+                        />
+                        <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
+                          {services.map((entry) => (
+                            <Cell
+                              key={entry.service}
+                              fill={
+                                entry.total_minor === maxService ? chart.accent : chart.barMuted
+                              }
+                            />
                           ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartFigure>
+                )}
+              </div>
+            </section>
+
+            <section
+              aria-labelledby="report-categories-heading"
+              className="clip-card rounded-xl border border-line bg-surface shadow-card"
+            >
+              <div className="px-5 py-4 md:px-6">
+                <h2 id="report-categories-heading" className="text-body font-medium text-ink-900">
+                  Spend by category
+                </h2>
+                <p className="mt-1 text-caption text-ink-500">
+                  Rolled up across every vendor for {data.period.label}
+                </p>
+              </div>
+
+              {categories.length === 0 ? (
+                <div className="px-5 pb-5 md:px-6">
+                  <EmptyNote message="No categorized spend in this period." />
+                </div>
+              ) : (
+                <ul className="border-t border-line">
+                  {categories.map((category) => (
+                    <li key={category.category} className="border-b border-line last:border-b-0">
+                      <div className="flex items-center gap-3 px-5 py-3.5 md:px-6">
+                        <span
+                          className="h-8 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: categoryColors[category.category] }}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-footnote font-medium text-ink-900">
+                            {categoryLabel(category.category)}
+                          </span>
+                          <span className="tnum mt-0.5 block text-caption text-ink-500">
+                            {category.services.length} vendors ·{' '}
+                            {categoryTotal === 0
+                              ? 0
+                              : Math.round((category.total_minor / categoryTotal) * 100)}
+                            % of spend
+                          </span>
                         </span>
-                        <span className="tnum text-body font-medium text-ink-900">
-                          <AnimatedCurrency value={category.total_minor} currency={currency} />
+                        <span className="ml-auto flex items-center gap-3">
+                          <span className="hidden items-center gap-1 sm:flex">
+                            {category.services.slice(0, 4).map((s) => (
+                              <ServiceLogo key={s.service} name={s.service} />
+                            ))}
+                          </span>
+                          <span className="tnum text-body font-medium text-ink-900">
+                            <AnimatedCurrency value={category.total_minor} currency={currency} />
+                          </span>
                         </span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
-      )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }
