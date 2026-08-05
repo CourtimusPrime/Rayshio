@@ -18,10 +18,32 @@ npx playwright install chromium   # first run only
 ```
 
 Typical loop: start `pnpm mcp` (and `pnpm dev:web` for HMR), then drive the page
-with a short Playwright script — navigate, sign in with `DASHBOARD_PASSWORD`,
-assert on text/DOM, and screenshot. Prefer asserting on the DOM over reading
-screenshots; a screenshot proves what a frame looked like, not what the app
-computed.
+with a short Playwright script — navigate, sign in, assert on text/DOM, and
+screenshot. Prefer asserting on the DOM over reading screenshots; a screenshot
+proves what a frame looked like, not what the app computed.
+
+**Signing in from a test.** Google OAuth cannot be driven headlessly, so the
+harness uses email/password, which `src/auth/index.ts` enables only when
+`NODE_ENV !== 'production'`. Seed an account with
+
+```bash
+pnpm cli seed-dev-user --email dev@test.example --password <pw> --org 1
+```
+
+then POST `/api/auth/sign-in/email` from Playwright's request context, which
+puts the cookie on the browser context. `DASHBOARD_PASSWORD` no longer signs
+anyone in — it is a legacy cookie check only, removed in R2.
+
+**Verify against a scratch database, not production.** The local `.env` points
+`PGSQL_DATABASE_URL` at Railway. Create a throwaway database, apply
+`migrations/`, and export `PGSQL_DATABASE_URL` for the run — process env beats
+the `.env` file, so no file needs editing. Two tenants holding
+identically-shaped data is what makes a cross-tenant leak look like a failure
+rather than a plausible success.
+
+**Beware caches when asserting a request was NOT made.** `logoCache` persists
+negative results in localStorage, so re-checking in a warmed page passes
+vacuously. Use a fresh browser context.
 
 Fall back to the Claude-in-Chrome MCP (`mcp__claude-in-chrome__*`) when you
 genuinely need the user's real browser session — an existing login, an installed
