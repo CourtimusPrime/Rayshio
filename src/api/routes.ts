@@ -1,5 +1,6 @@
-import { Router } from 'express';
+import { type Request, Router } from 'express';
 import { z } from 'zod';
+import { requireAuth } from '../auth/context.js';
 import { normalizeCategory } from '../categories.js';
 import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
@@ -49,7 +50,6 @@ import {
 import { projectInvoices } from '../queries/projections.js';
 import { senderAddressesFor } from '../queries/services.js';
 import { changePercent, displayStatus } from './serializers.js';
-import { hasSession, login, logout, requireSession } from './session.js';
 
 const TREND_MONTHS = 6;
 /** How far back projection looks for a cadence. */
@@ -84,22 +84,34 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 }
 
+/**
+ * The org this request may read, from the session that authenticated it.
+ *
+ * Throwing rather than falling back is the point. Every query below takes an
+ * org id, and for as long as that id was a process constant a missing one could
+ * quietly resolve to org 1 — which is exactly the bug this replaces. There is
+ * no `orgId ?? default` in this file, or anywhere else.
+ */
+function orgOf(req: Request): number {
+  const context = req.authContext;
+  if (!context) throw new Error('requireAuth did not run for this request');
+  return context.orgId;
+}
+
 export function apiRouter(): Router {
   const router = Router();
-  const orgId = config.DEFAULT_ORG_ID;
 
-  router.post('/session', login);
-  router.delete('/session', logout);
-  // deliberately not behind requireSession: the SPA calls this to decide whether
-  // to render the login screen
-  router.get('/session', (req, res) => {
-    res.json({ authenticated: hasSession(req) });
-  });
+  /*
+   * First statement, deliberately. This used to be a `router.use(requireSession)`
+   * partway down the file, which made every route declared above it silently
+   * public — a property you had to notice while reading rather than one the
+   * structure enforced. Genuinely public routes now live in ./public-routes.ts
+   * and cannot end up here by accident.
+   */
+  router.use(requireAuth);
 
-  // everything past this point is session-gated
-  router.use(requireSession);
-
-  router.get('/meta', async (_req, res) => {
+  router.get('/meta', async (req, res) => {
+    const orgId = orgOf(req);
     const [org, currencies, accounts, lastIngest, months] = await Promise.all([
       getOrg(orgId),
       listCurrencies(orgId),
@@ -141,6 +153,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/summary', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const month = optionalMonth(req.query.month);
     const previous = shiftMonth(month, -1);
@@ -197,6 +210,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/services', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const month = optionalMonth(req.query.month);
     const previous = shiftMonth(month, -1);
@@ -242,6 +256,7 @@ export function apiRouter(): Router {
    * where a data URL stores directly.
    */
   router.get('/logo/:service', async (req, res) => {
+    const orgId = orgOf(req);
     const name = req.params.service;
     if (!name) throw new BadRequest('service name is required');
 
@@ -266,6 +281,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/categories', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const month = optionalMonth(req.query.month);
 
@@ -285,6 +301,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/invoices', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const limit = Math.min(Number(req.query.limit ?? 25) || 25, 200);
     const offset = Math.max(Number(req.query.offset ?? 0) || 0, 0);
@@ -305,7 +322,10 @@ export function apiRouter(): Router {
       listInvoices(orgId, { ...filters, limit, offset }),
       countInvoices(orgId, filters),
     ]);
-    const categories = await dominantCategories(rows.map((r) => Number(r.invoice_id)));
+    const categories = await dominantCategories(
+      orgId,
+      rows.map((r) => Number(r.invoice_id)),
+    );
 
     const tracker = new ConversionTracker(currency);
     const effectiveDate = (row: (typeof rows)[number]) =>
@@ -344,6 +364,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/invoices/:id', async (req, res) => {
+    const orgId = orgOf(req);
     const invoiceId = Number(req.params.id);
     if (!Number.isInteger(invoiceId)) throw new BadRequest('invalid invoice id');
 
@@ -352,7 +373,7 @@ export function apiRouter(): Router {
       res.status(404).json({ error: `invoice ${invoiceId} not found` });
       return;
     }
-    const lineItems = await getLineItems(invoiceId);
+    const lineItems = await getLineItems(orgId, invoiceId);
 
     res.json({
       invoice_id: Number(invoice.id),
@@ -385,6 +406,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/invoices/:id/pdf', async (req, res) => {
+    const orgId = orgOf(req);
     const invoiceId = Number(req.params.id);
     if (!Number.isInteger(invoiceId)) throw new BadRequest('invalid invoice id');
 
@@ -400,6 +422,12 @@ export function apiRouter(): Router {
       return;
     }
 
+    /*
+     * `getPdf` takes a GridFS id and does no org check of its own, which is
+     * safe only because `pdf_id` came from the org-filtered row fetched above —
+     * it is never read from the request. Keep it that way: taking the id from a
+     * query parameter here would make every PDF in Mongo readable by id.
+     */
     let pdf: Buffer;
     try {
       pdf = await getPdf(invoice.pdf_id);
@@ -419,6 +447,7 @@ export function apiRouter(): Router {
   });
 
   router.get('/calendar', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const month = optionalMonth(req.query.month);
     const { from, to } = monthRange(month);
@@ -495,6 +524,7 @@ export function apiRouter(): Router {
    * window differs.
    */
   router.get('/reports', async (req, res) => {
+    const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const org = await getOrg(orgId);
     const fiscalStart = org?.fiscal_year_start_month ?? 1;
@@ -575,6 +605,7 @@ export function apiRouter(): Router {
   });
 
   router.patch('/settings/fiscal-year', async (req, res) => {
+    const orgId = orgOf(req);
     const parsed = fiscalBody.safeParse(req.body);
     if (!parsed.success) {
       throw new BadRequest('fiscal_year_start_month must be a whole number from 1 to 12');
@@ -589,6 +620,7 @@ export function apiRouter(): Router {
   });
 
   router.patch('/budget', async (req, res) => {
+    const orgId = orgOf(req);
     const parsed = budgetBody.safeParse(req.body);
     if (!parsed.success) {
       throw new BadRequest(parsed.error.issues.map((i) => i.message).join('; '));

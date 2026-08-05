@@ -1,6 +1,8 @@
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import pg from 'pg';
 import { config, requireConfig } from '../config.js';
+import { acceptInvitation, pendingInvitationFor } from './memberships.js';
 
 /**
  * Better Auth owns *identity only* — who is signing in. Tenancy is ours:
@@ -68,6 +70,40 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: process.env.NODE_ENV !== 'production',
     disableSignUp: true,
+  },
+
+  /*
+   * Sign-up is allowlisted at launch. The whole multi-tenancy machinery is
+   * built behind this gate, so opening the product later is deleting the
+   * `create.before` hook — not building an onboarding flow.
+   *
+   * Rejection *throws* rather than returning false: throwing an APIError is
+   * what Better Auth turns into a clean error redirect back to the sign-in
+   * page. Returning false aborts the write further down, after the OAuth
+   * callback has already committed to succeeding.
+   */
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          const email = user.email.trim().toLowerCase();
+          if (config.ALLOWED_SIGNUP_EMAILS.includes(email)) return;
+          if (await pendingInvitationFor(email)) return;
+
+          throw new APIError('FORBIDDEN', {
+            message: 'This email is not allowed to sign up yet.',
+          });
+        },
+        after: async (user) => {
+          // An invited user joins the org that invited them. An allowlisted one
+          // joins nothing: membership in an existing tenant is granted
+          // deliberately, by `pnpm cli grant-membership`, never inherited by
+          // being first through the door.
+          const invitation = await pendingInvitationFor(user.email);
+          if (invitation) await acceptInvitation(Number(invitation.id), user.id);
+        },
+      },
+    },
   },
 
   user: {

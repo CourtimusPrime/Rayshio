@@ -27,6 +27,12 @@ const envSchema = z.object({
 
   MCP_API_KEY: z.string().min(16).optional(),
   MCP_PORT: z.coerce.number().int().default(3000),
+  /**
+   * R1 only, and down to a single reader: the legacy-cookie branch in
+   * `src/auth/context.ts`. It is no longer a process-wide tenant — every
+   * handler takes its org from the session — so R2 deletes this along with
+   * that branch and `src/api/session.ts`.
+   */
   DEFAULT_ORG_ID: z.coerce.number().int().default(1),
   /**
    * Org that the legacy `MCP_API_KEY` env fallback maps to. Exists so a deploy
