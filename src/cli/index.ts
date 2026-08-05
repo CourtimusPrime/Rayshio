@@ -68,6 +68,87 @@ program
     await sync();
   });
 
+program
+  .command('grant-membership')
+  .description('Give an existing signed-in user access to an org')
+  .requiredOption('--org <id>', 'org id')
+  .requiredOption('--email <email>', 'the user, who must have signed in at least once')
+  .option('--role <role>', 'owner | admin | member', 'member')
+  .action(async (opts: { org: string; email: string; role: string }) => {
+    const { grantMembershipCommand } = await import('./commands/membership.js');
+    await grantMembershipCommand(Number(opts.org), opts.email, opts.role);
+  });
+
+program
+  .command('revoke-membership')
+  .description("Remove a user's access to an org")
+  .requiredOption('--org <id>', 'org id')
+  .requiredOption('--email <email>', 'the user')
+  .action(async (opts: { org: string; email: string }) => {
+    const { revokeMembershipCommand } = await import('./commands/membership.js');
+    await revokeMembershipCommand(Number(opts.org), opts.email);
+  });
+
+program
+  .command('list-memberships')
+  .description('Show which orgs a user can see')
+  .requiredOption('--email <email>', 'the user')
+  .action(async (opts: { email: string }) => {
+    const { listMembershipsCommand } = await import('./commands/membership.js');
+    await listMembershipsCommand(opts.email);
+  });
+
+program
+  .command('invite')
+  .description('Let an address outside the signup allowlist join an org')
+  .requiredOption('--org <id>', 'org id')
+  .requiredOption('--email <email>', 'who to invite')
+  .option('--role <role>', 'owner | admin | member', 'member')
+  .action(async (opts: { org: string; email: string; role: string }) => {
+    const { inviteCommand } = await import('./commands/membership.js');
+    await inviteCommand(Number(opts.org), opts.email, opts.role);
+  });
+
+program
+  .command('create-api-key')
+  .description('Mint an MCP API key for an org; shown once')
+  .requiredOption('--org <id>', 'org id')
+  .option('--name <name>', 'label for the key', 'MCP key')
+  .action(async (opts: { org: string; name: string }) => {
+    const { createApiKeyCommand } = await import('./commands/membership.js');
+    await createApiKeyCommand(Number(opts.org), opts.name);
+  });
+
+program
+  .command('list-api-keys')
+  .description("An org's MCP API keys, by prefix")
+  .requiredOption('--org <id>', 'org id')
+  .action(async (opts: { org: string }) => {
+    const { listApiKeysCommand } = await import('./commands/membership.js');
+    await listApiKeysCommand(Number(opts.org));
+  });
+
+program
+  .command('revoke-api-key')
+  .description('Revoke one MCP API key')
+  .requiredOption('--org <id>', 'org id')
+  .requiredOption('--key <id>', 'key id, from list-api-keys')
+  .action(async (opts: { org: string; key: string }) => {
+    const { revokeApiKeyCommand } = await import('./commands/membership.js');
+    await revokeApiKeyCommand(Number(opts.org), Number(opts.key));
+  });
+
+program
+  .command('seed-dev-user')
+  .description('Create a password user for the Playwright harness (never in production)')
+  .requiredOption('--email <email>', 'the user')
+  .requiredOption('--password <password>', 'the password')
+  .option('--org <id>', 'org to grant owner on', '1')
+  .action(async (opts: { email: string; password: string; org: string }) => {
+    const { seedDevUser } = await import('./commands/seed-dev-user.js');
+    await seedDevUser(opts.email, opts.password, Number(opts.org));
+  });
+
 program.parseAsync().catch((err) => {
   console.error(err);
   process.exit(1);
