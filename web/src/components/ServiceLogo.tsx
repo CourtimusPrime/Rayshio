@@ -1,3 +1,6 @@
+import { useServiceLogo } from '../utils/logoCache';
+import { lobeIconFor } from './serviceIcons';
+
 /** Brand swatches carried over from the design, keyed by vendor name. */
 const serviceBrand: Record<string, { bg: string; fg: string }> = {
   AWS: { bg: '#fff4e6', fg: '#b45309' },
@@ -35,19 +38,73 @@ function brandFor(name: string): { bg: string; fg: string } {
   return fallbackPalette[hash % fallbackPalette.length] as { bg: string; fg: string };
 }
 
+/**
+ * Real brand marks sit on a white disc in both themes. Vendor logos are drawn
+ * for light backgrounds — a dark navy mark on a dark circle disappears — and a
+ * white disc is what every other product does with third-party logos.
+ */
+const MARK_INK = '#1c1c20';
+
+const SIZES = {
+  sm: { frame: 'h-7 w-7', pad: 'p-1', glyph: 20, text: 'text-[11px]' },
+  md: { frame: 'h-9 w-9', pad: 'p-1.5', glyph: 24, text: 'text-[13px]' },
+} as const;
+
 interface ServiceLogoProps {
   name: string;
-  size?: 'sm' | 'md';
+  size?: keyof typeof SIZES;
 }
 
+/**
+ * A vendor's logo in a circular frame, in three tiers:
+ *
+ *  1. a brand mark from @lobehub/icons-static-svg, inlined at build time;
+ *  2. the vendor's favicon, proxied by `/api/logo/:service` so the browser
+ *     never calls an icon service directly, and cached in localStorage;
+ *  3. a two-letter monogram on a deterministic brand tint.
+ *
+ * The lobe set is an AI/LLM collection, so tier 1 covers only some vendors;
+ * tier 2 is what makes the rest of a mailbox's senders show a real logo.
+ */
 export function ServiceLogo({ name, size = 'sm' }: ServiceLogoProps) {
+  const { frame, pad, glyph, text } = SIZES[size];
+  const lobeIcon = lobeIconFor(name);
+  // tier 1 needs no lookup, so only ask the server about the vendors it misses
+  const logo = useServiceLogo(name, lobeIcon === undefined);
   const brand = brandFor(name);
-  const dimension = size === 'sm' ? 'h-7 w-7 text-[11px]' : 'h-9 w-9 text-[13px]';
+
+  const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ${frame}`;
+
+  if (lobeIcon) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${shell} ${pad} bg-white ring-1 ring-line`}
+        data-service-logo="mark"
+        style={{ color: MARK_INK, fontSize: glyph }}
+        // build-time asset from the icon package, not user or network content
+        dangerouslySetInnerHTML={{ __html: lobeIcon }}
+      />
+    );
+  }
+
+  if (logo) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${shell} ${pad} bg-white ring-1 ring-line`}
+        data-service-logo="favicon"
+      >
+        <img alt="" className="h-full w-full object-contain" src={logo} />
+      </span>
+    );
+  }
 
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex shrink-0 items-center justify-center rounded-lg font-semibold ${dimension}`}
+      className={`${shell} font-semibold ${text}`}
+      data-service-logo="monogram"
       style={{ backgroundColor: brand.bg, color: brand.fg }}
     >
       {name.slice(0, 2).toUpperCase()}

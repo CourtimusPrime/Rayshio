@@ -33,3 +33,22 @@ export async function listServices(orgId: number): Promise<ServiceRow[]> {
     .execute();
   return rows as unknown as ServiceRow[];
 }
+
+/**
+ * Every sender address filed under a vendor name. A vendor can have several —
+ * Neon mails from both `neon.tech` and `ar.neon.tech`, and a vendor that moved
+ * to a payment processor keeps its old direct sender — so callers that need a
+ * domain should try each rather than assuming one row.
+ */
+export async function senderAddressesFor(orgId: number, name: string): Promise<string[]> {
+  const rows = await db
+    .selectFrom('server.service')
+    .innerJoin('billing.email', 'billing.email.server_id', 'server.service.id')
+    .innerJoin('billing.invoices', 'billing.invoices.email_id', 'billing.email.id')
+    .select('server.service.sender_address')
+    .where('billing.invoices.org_id', '=', orgId)
+    .where('server.service.name', '=', name)
+    .groupBy('server.service.sender_address')
+    .execute();
+  return rows.map((r) => r.sender_address);
+}

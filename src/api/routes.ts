@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { normalizeCategory } from '../categories.js';
 import { config } from '../config.js';
+import { logoDomainFor } from '../logos/domains.js';
+import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
 import {
   ConversionTracker,
@@ -45,6 +47,7 @@ import {
   trailingMonths,
 } from '../queries/months.js';
 import { projectInvoices } from '../queries/projections.js';
+import { senderAddressesFor } from '../queries/services.js';
 import { changePercent, displayStatus } from './serializers.js';
 import { hasSession, login, logout, requireSession } from './session.js';
 
@@ -226,6 +229,39 @@ export function apiRouter(): Router {
         change_percent: changePercent(row.total_minor, priorByService.get(row.service) ?? 0),
       })),
       conversion: tracker.meta(),
+    });
+  });
+
+  /**
+   * The vendor's logo as a data URL, or `{ data_url: null }` when there is no
+   * usable one and the client should fall back to a monogram.
+   *
+   * Proxied rather than linked so the browser never calls an icon service —
+   * that would leak the org's vendor list to a third party. The response is
+   * JSON rather than image bytes because the client caches it in localStorage,
+   * where a data URL stores directly.
+   */
+  router.get('/logo/:service', async (req, res) => {
+    const name = req.params.service;
+    if (!name) throw new BadRequest('service name is required');
+
+    const senders = await senderAddressesFor(orgId, name);
+    if (senders.length === 0) {
+      res.status(404).json({ error: `no service named ${name}` });
+      return;
+    }
+
+    const domain = senders.map((s) => logoDomainFor(name, s)).find((d) => d !== undefined);
+    if (!domain) {
+      // every sender is a payment processor and no override names the vendor
+      res.json({ data_url: null });
+      return;
+    }
+
+    const logo = await logoForDomain(domain);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.json({
+      data_url: logo ? `data:${logo.contentType};base64,${logo.data.toString('base64')}` : null,
     });
   });
 
