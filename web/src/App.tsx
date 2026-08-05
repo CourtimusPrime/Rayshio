@@ -52,6 +52,14 @@ function Shell() {
 
   return (
     <div className="flex min-h-full w-full flex-col bg-surface md:h-full md:flex-row">
+      {/* lives here rather than in index.html: the target is React-owned, and
+          the six nav links are otherwise in front of the content on every page */}
+      <a
+        href="#main-content"
+        className="skip-link rounded-lg border border-line bg-surface px-3 py-2 text-body font-medium text-ink-900 shadow-e3"
+      >
+        Skip to content
+      </a>
       <Sidebar />
 
       {/*
@@ -69,7 +77,7 @@ function Shell() {
             it costs no layout and leaves no strip above the bar */}
         <div ref={sentinel} aria-hidden="true" className="-mb-px h-px shrink-0" />
         <TopBar title={titles[pathname] ?? 'Dashboard'} scrolled={!atTop} />
-        <main className="flex-1 px-5 py-6 md:px-8 md:py-8">
+        <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-6 md:px-8 md:py-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/breakdown" element={<Breakdown />} />

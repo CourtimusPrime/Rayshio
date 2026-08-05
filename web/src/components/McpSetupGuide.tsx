@@ -1,15 +1,25 @@
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useState } from 'react';
+import { useRovingTabIndex } from '../hooks/useRovingTabIndex';
 import { useWorkspace } from '../state/workspace';
 import { LoadingBlock } from './states';
 
 /** The five tools this server actually registers (src/mcp/tools/index.ts). */
 const mcpTools = [
-  { name: 'list_services', description: 'Vendors you have invoices from, with counts and date range' },
+  {
+    name: 'list_services',
+    description: 'Vendors you have invoices from, with counts and date range',
+  },
   { name: 'list_invoices', description: 'Invoices, filterable by service name and date range' },
   { name: 'get_invoice', description: 'One invoice in full, including its line items' },
-  { name: 'get_invoice_pdf', description: 'The original PDF for an invoice, when one was attached' },
-  { name: 'spend_summary', description: 'Totals grouped by service or line-item description, per currency' },
+  {
+    name: 'get_invoice_pdf',
+    description: 'The original PDF for an invoice, when one was attached',
+  },
+  {
+    name: 'spend_summary',
+    description: 'Totals grouped by service or line-item description, per currency',
+  },
 ];
 
 const TOKEN_PLACEHOLDER = '<MCP_API_KEY>';
@@ -76,6 +86,11 @@ export function McpSetupGuide() {
   const [copied, setCopied] = useState<string | null>(null);
 
   const active = mcpClients.find((client) => client.id === activeId) ?? mcpClients[0];
+  const clientTabs = useRovingTabIndex({
+    values: mcpClients.map((client) => client.id),
+    active: activeId,
+    onActivate: setActiveId,
+  });
   const endpoint = meta?.mcp_endpoint;
 
   const copy = async (id: string, value: string) => {
@@ -113,7 +128,7 @@ export function McpSetupGuide() {
           <button
             type="button"
             onClick={() => copy('endpoint', endpoint)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-2 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
+            className="press inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-2 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
           >
             {copied === 'endpoint' ? (
               <CheckIcon className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
@@ -136,6 +151,10 @@ export function McpSetupGuide() {
           Setup instructions per client
         </h2>
 
+        <span className="sr-only" role="status" aria-live="polite">
+          {copied ? 'Copied to clipboard' : ''}
+        </span>
+
         <div
           role="tablist"
           aria-label="MCP clients"
@@ -152,7 +171,8 @@ export function McpSetupGuide() {
                 aria-selected={isActive}
                 aria-controls={`panel-${client.id}`}
                 onClick={() => setActiveId(client.id)}
-                className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-footnote transition-colors ${
+                {...clientTabs.itemProps(client.id)}
+                className={`press whitespace-nowrap rounded-lg px-3.5 py-2 text-footnote transition-colors ${
                   isActive
                     ? 'bg-accent-soft font-medium text-accent-strong'
                     : 'text-ink-500 hover:bg-canvas hover:text-ink-900'
@@ -181,7 +201,7 @@ export function McpSetupGuide() {
             <button
               type="button"
               onClick={() => copy(active.id, snippet)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
+              className="press inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
             >
               {copied === active.id ? (
                 <CheckIcon className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
@@ -192,7 +212,12 @@ export function McpSetupGuide() {
             </button>
           </div>
 
-          <pre className="overflow-x-auto border-y border-line bg-canvas px-5 py-4 font-mono text-code leading-relaxed text-ink-700 md:px-6">
+          <pre
+            tabIndex={0}
+            role="region"
+            aria-label="Configuration snippet"
+            className="overflow-x-auto border-y border-line bg-canvas px-5 py-4 font-mono text-code leading-relaxed text-ink-700 md:px-6"
+          >
             <code>{snippet}</code>
           </pre>
 

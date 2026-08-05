@@ -120,7 +120,7 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
+            className="press tap rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
           >
             <XIcon className="h-4 w-4" strokeWidth={1.75} />
           </button>
@@ -147,7 +147,8 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
                 <StatusBadge status={data.status} />
               </div>
 
-              {data.failure_reason && <ErrorNote message={data.failure_reason} />}
+              {/* stored on the invoice, not something that just happened */}
+              {data.failure_reason && <ErrorNote message={data.failure_reason} live="off" />}
 
               <div>
                 <h3 className="text-body font-medium text-ink-900">Line items</h3>
@@ -197,7 +198,7 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
                   href={`/api/invoices/${data.invoice_id}/pdf`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
+                  className="press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
                 >
                   <DownloadIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
                   Open PDF

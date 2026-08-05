@@ -30,9 +30,23 @@ export function LoadingLines({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export function ErrorNote({ message }: { message: string }) {
+/**
+ * `live` distinguishes an error that just happened from one that is simply
+ * being described. A failed fetch should interrupt; an invoice's stored
+ * failure reason is static content and announcing it as news would be wrong.
+ */
+export function ErrorNote({
+  message,
+  live = 'polite',
+}: {
+  message: string;
+  live?: 'polite' | 'assertive' | 'off';
+}) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3.5 py-3 text-footnote text-danger-text">
+    <div
+      role={live === 'assertive' ? 'alert' : live === 'polite' ? 'status' : undefined}
+      className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3.5 py-3 text-footnote text-danger-text"
+    >
       <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
       <span>{message}</span>
     </div>

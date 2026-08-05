@@ -1,8 +1,19 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useServices } from '../api/hooks';
+import { useChartMotion } from '../motion/useChartMotion';
 import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency } from '../utils/format';
+import { ChartFigure } from './ChartFigure';
 import { ConversionNote } from './ConversionNote';
 import { EmptyNote, ErrorNote, LoadingBlock } from './states';
 
@@ -11,10 +22,14 @@ const TOP_N = 6;
 export function ServiceBreakdownChart() {
   const { currency, month } = useWorkspace();
   const chart = useChartColors();
+  const chartMotion = useChartMotion();
   const { data, isPending, error } = useServices(currency, month);
 
   const rows = (data?.services ?? []).slice(0, TOP_N);
   const max = Math.max(...rows.map((d) => d.total_minor), 0);
+  const summary = rows
+    .map((r) => `${r.service} ${formatCurrency(r.total_minor, currency ?? 'USD')}`)
+    .join('; ');
 
   return (
     <section
@@ -37,9 +52,17 @@ export function ServiceBreakdownChart() {
           <EmptyNote message="No invoices this month." />
         )}
         {!error && !isPending && rows.length > 0 && currency && (
-          <div className="h-56">
+          <ChartFigure
+            className="h-56"
+            label={`Top ${rows.length} vendors by spend this month`}
+            summary={summary}
+          >
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: -12 }} barSize={26}>
+              <BarChart
+                data={rows}
+                margin={{ top: 8, right: 4, bottom: 0, left: -12 }}
+                barSize={26}
+              >
                 <CartesianGrid stroke={chart.grid} vertical={false} />
                 <XAxis
                   dataKey="service"
@@ -59,7 +82,7 @@ export function ServiceBreakdownChart() {
                   contentStyle={chart.tooltip}
                   formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                 />
-                <Bar dataKey="total_minor" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
                   {rows.map((entry) => (
                     <Cell
                       key={entry.service}
@@ -69,7 +92,7 @@ export function ServiceBreakdownChart() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFigure>
         )}
         <ConversionNote meta={data?.conversion} />
       </div>

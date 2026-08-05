@@ -1,10 +1,12 @@
 import { ArrowDownRightIcon, ArrowRightIcon, ArrowUpRightIcon } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useSummary } from '../api/hooks';
+import { useChartMotion } from '../motion/useChartMotion';
 import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency, formatPercent } from '../utils/format';
 import { AnimatedCount, AnimatedCurrency } from './AnimatedNumber';
+import { ChartFigure } from './ChartFigure';
 import { ConversionNote } from './ConversionNote';
 import { ErrorNote, LoadingBlock } from './states';
 
@@ -32,6 +34,7 @@ function Body({
   currency: string;
 }) {
   const chart = useChartColors();
+  const chartMotion = useChartMotion();
   const {
     current_total_minor: current,
     previous_total_minor: previous,
@@ -43,6 +46,9 @@ function Body({
 
   const delta = previous === 0 ? null : ((current - previous) / previous) * 100;
   const difference = current - previous;
+  const trendSummary = trend
+    .map((point) => `${point.label} ${formatCurrency(point.total_minor, currency)}`)
+    .join(', ');
 
   // spending more is not good news, so the chip is tinted by direction rather
   // than always reading as the accent colour
@@ -83,7 +89,11 @@ function Body({
         {difference >= 0 ? 'more' : 'less'}
       </p>
 
-      <div className="-mx-1 mt-5 h-24">
+      <ChartFigure
+        className="-mx-1 mt-5 h-24"
+        label={`Spend over the last ${trend.length} months`}
+        summary={trendSummary}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={trend} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <defs>
@@ -106,10 +116,11 @@ function Body({
               fill="url(#spendFill)"
               dot={false}
               activeDot={{ r: 3, fill: chart.accent, strokeWidth: 0 }}
+              {...chartMotion}
             />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </ChartFigure>
 
       <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
         <div>

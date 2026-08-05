@@ -56,7 +56,7 @@ export function Login() {
         <button
           type="submit"
           disabled={login.isPending || password === ''}
-          className="mt-5 h-10 w-full rounded-lg bg-accent text-footnote font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-50"
+          className="press-lg mt-5 h-10 w-full rounded-lg bg-accent text-footnote font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-50"
         >
           {login.isPending ? 'Signing in…' : 'Sign in'}
         </button>

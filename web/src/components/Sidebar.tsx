@@ -35,14 +35,15 @@ export function Sidebar() {
       </div>
 
       <nav aria-label="Main" className="px-3">
-        <ul className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
+        {/* a horizontal scroller below md; needs a tab stop to be keyboard-scrollable */}
+        <ul tabIndex={0} className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
           {items.map(({ to, label, icon: Icon, end }) => (
             <li key={to}>
               <NavLink
                 to={to}
                 end={end}
                 className={({ isActive }) =>
-                  `flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-body transition-colors ${
+                  `press-row flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-body ${
                     isActive
                       ? 'bg-accent-soft font-medium text-accent-strong'
                       : 'text-ink-500 hover:bg-canvas hover:text-ink-900'

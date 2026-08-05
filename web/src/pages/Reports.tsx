@@ -13,10 +13,13 @@ import { useState } from 'react';
 import { useReport } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
 import { AnimatedCount, AnimatedCurrency } from '../components/AnimatedNumber';
+import { ChartFigure } from '../components/ChartFigure';
 import { ConversionNote } from '../components/ConversionNote';
 import { FiscalYearSetting } from '../components/FiscalYearSetting';
 import { ServiceLogo } from '../components/ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingBlock } from '../components/states';
+import { useRovingTabIndex } from '../hooks/useRovingTabIndex';
+import { useChartMotion } from '../motion/useChartMotion';
 import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import type { PeriodType } from '../types';
@@ -27,9 +30,12 @@ import { formatCurrency, formatPercent } from '../utils/format';
  * calendar months. Periods come from the org's fiscal year start, so an April
  * start makes Jul–Sep "Q2" rather than "Q3".
  */
+const PERIOD_TYPES = ['quarter', 'year'] as const;
+
 export function Reports() {
   const { currency } = useWorkspace();
   const chart = useChartColors();
+  const chartMotion = useChartMotion();
   const [type, setType] = useState<PeriodType>('quarter');
   const [periodKey, setPeriodKey] = useState<string | undefined>();
 
@@ -39,6 +45,12 @@ export function Reports() {
   const index = periods.findIndex((p) => p.key === data?.period.key);
   const older = index >= 0 ? periods[index + 1]?.key : periods[0]?.key;
   const newer = index > 0 ? periods[index - 1]?.key : undefined;
+
+  const periodTabs = useRovingTabIndex({
+    values: PERIOD_TYPES,
+    active: type,
+    onActivate: (next) => switchType(next),
+  });
 
   const switchType = (next: PeriodType) => {
     setType(next);
@@ -65,14 +77,17 @@ export function Reports() {
             aria-label="Reporting period"
             className="flex gap-1.5 rounded-lg border border-line p-1"
           >
-            {(['quarter', 'year'] as const).map((value) => (
+            {PERIOD_TYPES.map((value) => (
               <button
                 key={value}
                 type="button"
                 role="tab"
+                id={`report-tab-${value}`}
                 aria-selected={type === value}
+                aria-controls="report-panel"
                 onClick={() => switchType(value)}
-                className={`rounded-md px-3 py-1.5 text-footnote transition-colors ${
+                {...periodTabs.itemProps(value)}
+                className={`press rounded-md px-3 py-1.5 text-footnote transition-colors ${
                   type === value
                     ? 'bg-accent-soft font-medium text-accent-strong'
                     : 'text-ink-500 hover:bg-canvas hover:text-ink-900'
@@ -83,13 +98,13 @@ export function Reports() {
             ))}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => older && setPeriodKey(older)}
               disabled={!older}
               aria-label="Previous period"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -101,7 +116,7 @@ export function Reports() {
               onClick={() => newer && setPeriodKey(newer)}
               disabled={!newer}
               aria-label="Next period"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -151,7 +166,13 @@ export function Reports() {
               in {data.previous_period.label}
             </p>
 
-            <div className="mt-5 h-40">
+            <ChartFigure
+              className="mt-5 h-40"
+              label={`Spend by ${type === 'quarter' ? 'quarter' : 'year'}`}
+              summary={data.trend
+                .map((t) => `${t.label} ${formatCurrency(t.total_minor, currency)}`)
+                .join(', ')}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.trend} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                   <CartesianGrid stroke={chart.grid} vertical={false} />
@@ -173,10 +194,15 @@ export function Reports() {
                     contentStyle={chart.tooltip}
                     formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                   />
-                  <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} fill={chart.accent} />
+                  <Bar
+                    dataKey="total_minor"
+                    radius={[6, 6, 0, 0]}
+                    fill={chart.accent}
+                    {...chartMotion}
+                  />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </ChartFigure>
 
             <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
               <div>
@@ -216,13 +242,21 @@ export function Reports() {
             <h2 id="report-vendors-heading" className="text-body font-medium text-ink-900">
               Top vendors by spend
             </h2>
-            <p className="mt-1 text-caption text-ink-500">{data.period.rangeLabel}, parsed invoices only</p>
+            <p className="mt-1 text-caption text-ink-500">
+              {data.period.rangeLabel}, parsed invoices only
+            </p>
 
             <div className="mt-5">
               {services.length === 0 ? (
                 <EmptyNote message="No invoices in this period." />
               ) : (
-                <div className="h-56">
+                <ChartFigure
+                  className="h-56"
+                  label="Top vendors by spend this period"
+                  summary={services
+                    .map((v) => `${v.service} ${formatCurrency(v.total_minor, currency)}`)
+                    .join('; ')}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={services}
@@ -248,7 +282,7 @@ export function Reports() {
                         contentStyle={chart.tooltip}
                         formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                       />
-                      <Bar dataKey="total_minor" radius={[6, 6, 0, 0]}>
+                      <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
                         {services.map((entry) => (
                           <Cell
                             key={entry.service}
@@ -258,7 +292,7 @@ export function Reports() {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </ChartFigure>
               )}
             </div>
           </section>

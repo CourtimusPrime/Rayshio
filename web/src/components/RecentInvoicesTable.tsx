@@ -29,7 +29,7 @@ export function RecentInvoicesTable({ title = 'Recent invoices', limit = 6 }) {
         </div>
         <Link
           to="/invoices"
-          className="hidden items-center gap-1.5 text-footnote font-medium text-accent hover:text-accent-strong sm:inline-flex"
+          className="press hidden items-center gap-1.5 text-footnote font-medium text-accent transition-colors hover:text-accent-strong sm:inline-flex"
         >
           View all
           <ArrowRightIcon className="h-3.5 w-3.5" strokeWidth={2} />
@@ -51,7 +51,9 @@ export function RecentInvoicesTable({ title = 'Recent invoices', limit = 6 }) {
           <EmptyNote message="No invoices ingested yet." />
         </div>
       )}
-      {!error && rows.length > 0 && <InvoiceTable rows={rows} onSelect={setSelected} />}
+      {!error && rows.length > 0 && (
+        <InvoiceTable rows={rows} onSelect={setSelected} selectedId={selected} />
+      )}
 
       {!error && rows.length > 0 && (
         <div className="flex items-center justify-between px-5 py-3 text-caption text-ink-500 md:px-6">

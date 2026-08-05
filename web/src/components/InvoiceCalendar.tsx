@@ -98,12 +98,12 @@ export function InvoiceCalendar() {
             </li>
           </ul>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setMonth(addMonths(month, -1))}
               aria-label="Previous month"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900"
+              className="press tap flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900"
             >
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -111,7 +111,7 @@ export function InvoiceCalendar() {
               type="button"
               onClick={() => setMonth(addMonths(month, 1))}
               aria-label="Next month"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900"
+              className="press tap flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900"
             >
               <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>

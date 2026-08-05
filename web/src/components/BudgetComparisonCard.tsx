@@ -101,14 +101,14 @@ export function BudgetComparisonCard() {
       </label>
       <button
         type="submit"
-        className="rounded-lg bg-accent px-3 py-2 text-footnote font-medium text-white transition-colors hover:bg-accent-strong"
+        className="press rounded-lg bg-accent px-3 py-2 text-footnote font-medium text-white transition-colors hover:bg-accent-strong"
       >
         Save
       </button>
       <button
         type="button"
         onClick={() => setEditing(false)}
-        className="rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
+        className="press rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
       >
         Cancel
       </button>
@@ -134,7 +134,7 @@ export function BudgetComparisonCard() {
           <button
             type="button"
             onClick={startEditing}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
+            className="press mt-4 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
           >
             <PencilIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
             Set a {currency} budget
@@ -186,7 +186,7 @@ export function BudgetComparisonCard() {
           type="button"
           onClick={startEditing}
           aria-label="Edit monthly budget"
-          className="rounded-md p-1 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
+          className="press tap rounded-md p-1 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
         >
           <PencilIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
         </button>
@@ -238,7 +238,10 @@ export function BudgetComparisonCard() {
         <div>
           <dt className="text-micro uppercase tracking-wide text-ink-400">Budget pace</dt>
           <dd className="tnum mt-1 text-body font-medium text-ink-900">
-            <AnimatedCount value={Math.round((data.current_total_minor / budget) * 100)} suffix="%" />
+            <AnimatedCount
+              value={Math.round((data.current_total_minor / budget) * 100)}
+              suffix="%"
+            />
           </dd>
         </div>
       </dl>

@@ -84,7 +84,7 @@ export function Invoices() {
               setStatus(event.target.value);
               setPage(0);
             }}
-            className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote text-ink-900 hover:bg-canvas"
+            className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote text-ink-900 transition-colors hover:bg-canvas"
           >
             {statuses.map((value) => (
               <option key={value} value={value}>
@@ -110,20 +110,22 @@ export function Invoices() {
           <EmptyNote message="No invoices match these filters." />
         </div>
       )}
-      {!error && rows.length > 0 && <InvoiceTable rows={rows} onSelect={setSelected} />}
+      {!error && rows.length > 0 && (
+        <InvoiceTable rows={rows} onSelect={setSelected} selectedId={selected} />
+      )}
 
       {!error && total > PAGE_SIZE && (
         <div className="flex items-center justify-between px-5 py-3 text-caption text-ink-500 md:px-6">
           <span className="tnum">
             {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-2">
             <button
               type="button"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               aria-label="Previous page"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40"
+              className="press tap flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -132,7 +134,7 @@ export function Invoices() {
               disabled={page >= lastPage}
               onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
               aria-label="Next page"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40"
+              className="press tap flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>

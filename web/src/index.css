@@ -44,24 +44,19 @@
   --shadow-rgb: 24 24 28;
   --shadow-boost: 1;
 
-  --shadow-e1:
-    0 1px 2px -1px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))),
-    0 2px 6px -2px rgb(var(--shadow-rgb) / calc(0.05 * var(--shadow-boost)));
-  --shadow-e2:
-    0 2px 4px -2px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))),
-    0 6px 14px -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost)));
-  --shadow-e3:
-    0 4px 10px -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost))),
-    0 14px 32px -10px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost)));
-  --shadow-e4:
-    0 8px 20px -8px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost))),
-    0 32px 72px -16px rgb(var(--shadow-rgb) / calc(0.2 * var(--shadow-boost)));
+  --shadow-e1: 0 1px 2px -1px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))), 0 2px 6px
+    -2px rgb(var(--shadow-rgb) / calc(0.05 * var(--shadow-boost)));
+  --shadow-e2: 0 2px 4px -2px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))), 0 6px 14px
+    -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost)));
+  --shadow-e3: 0 4px 10px -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost))), 0 14px
+    32px -10px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost)));
+  --shadow-e4: 0 8px 20px -8px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost))), 0 32px
+    72px -16px rgb(var(--shadow-rgb) / calc(0.2 * var(--shadow-boost)));
 
   /* Where content meets floating chrome: a hairline and a short falloff, not a
      drop shadow. Only painted once something actually scrolls underneath. */
-  --shadow-edge:
-    0 1px 0 0 rgb(var(--line)),
-    0 10px 18px -14px rgb(var(--shadow-rgb) / calc(0.5 * var(--shadow-boost)));
+  --shadow-edge: 0 1px 0 0 rgb(var(--line)), 0 10px 18px -14px
+    rgb(var(--shadow-rgb) / calc(0.5 * var(--shadow-boost)));
 
   /*
    * Radii, named after the Tailwind keys that consume them so existing classes
@@ -224,18 +219,14 @@
    * pixel moves, which is the latency this is meant to remove.
    */
   .press {
-    transition:
-      transform 110ms var(--ease-out-apple),
-      background-color 110ms linear;
+    transition: transform 110ms var(--ease-out-apple), background-color 110ms linear;
   }
   .press:active:not(:disabled) {
     transform: scale(0.96);
   }
   /* Wide targets: 4% is a wobble at 200px wide, 1.5% is a press. */
   .press-lg {
-    transition:
-      transform 110ms var(--ease-out-apple),
-      background-color 110ms linear;
+    transition: transform 110ms var(--ease-out-apple), background-color 110ms linear;
   }
   .press-lg:active:not(:disabled) {
     transform: scale(0.985);
@@ -264,7 +255,7 @@
     position: relative;
   }
   .tap::after {
-    content: '';
+    content: "";
     position: absolute;
     left: 50%;
     top: 50%;
@@ -299,15 +290,14 @@
     -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-sat));
     backdrop-filter: blur(var(--material-blur)) saturate(var(--material-sat));
     border-bottom: 1px solid transparent;
-    transition:
-      border-color var(--dur-base) var(--ease-standard),
-      box-shadow var(--dur-base) var(--ease-standard);
+    transition: border-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base)
+      var(--ease-standard);
   }
   /*
    * The scroll edge, not a permanent divider: it appears only once content is
    * actually underneath the bar, so at rest the chrome has no seam at all.
    */
-  .material-chrome[data-scrolled='true'] {
+  .material-chrome[data-scrolled="true"] {
     border-bottom-color: rgb(var(--line));
     box-shadow: var(--shadow-edge);
   }
@@ -340,7 +330,7 @@
    * gesture and the surface becomes opaque instead. Nothing is legible through
    * a sheet travelling under a finger anyway.
    */
-  .material-sheet[data-dragging='true'] {
+  .material-sheet[data-dragging="true"] {
     background-color: rgb(var(--surface));
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -414,7 +404,7 @@ html.scroll-locked body {
    */
   .tnum {
     font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum';
+    font-feature-settings: "tnum";
   }
 
   /*
@@ -431,7 +421,6 @@ html.scroll-locked body {
     overflow: clip;
     overflow-clip-margin: 6px;
   }
-
 }
 @layer base {
   /*
@@ -511,9 +500,9 @@ html[data-theme-transition] *::after {
 @media (pointer: coarse) {
   button,
   select,
-  input:not([type='checkbox']):not([type='radio']),
-  [role='tab'],
-  [role='radio'] {
+  input:not([type="checkbox"]):not([type="radio"]),
+  [role="tab"],
+  [role="radio"] {
     min-height: 44px;
   }
 }

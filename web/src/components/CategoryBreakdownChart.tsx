@@ -1,16 +1,21 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useCategories } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
+import { useChartMotion } from '../motion/useChartMotion';
 import { useChartColors } from '../state/theme';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency } from '../utils/format';
 import { AnimatedCurrency } from './AnimatedNumber';
+import { ChartFigure } from './ChartFigure';
 import { ConversionNote } from './ConversionNote';
 import { EmptyNote, ErrorNote, LoadingBlock } from './states';
 
 export function CategoryBreakdownChart() {
   const { currency, month } = useWorkspace();
   const chart = useChartColors();
+  // once: a Pie sweeps from zero degrees on every data change, so paging a
+  // month would redraw the whole ring rather than morph it
+  const chartMotion = useChartMotion(true);
   const { data, isPending, error } = useCategories(currency, month);
 
   // negative rows (credits, included-usage offsets) cannot be drawn as pie
@@ -18,6 +23,12 @@ export function CategoryBreakdownChart() {
   const categories = data?.categories ?? [];
   const total = categories.reduce((sum, item) => sum + item.total_minor, 0);
   const slices = categories.filter((item) => item.total_minor > 0);
+  const donutSummary = slices
+    .map(
+      (s) =>
+        `${categoryLabel(s.category)} ${total === 0 ? '0' : Math.round((s.total_minor / total) * 100)}%`,
+    )
+    .join(', ');
 
   return (
     <section
@@ -38,7 +49,11 @@ export function CategoryBreakdownChart() {
 
         {!error && slices.length > 0 && currency && (
           <div className="flex flex-col items-center gap-6 sm:flex-row">
-            <div className="relative h-40 w-40 shrink-0">
+            <ChartFigure
+              className="relative h-40 w-40 shrink-0"
+              label="Spend by usage category"
+              summary={donutSummary}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -49,6 +64,7 @@ export function CategoryBreakdownChart() {
                     outerRadius={76}
                     paddingAngle={2}
                     stroke="none"
+                    {...chartMotion}
                   >
                     {slices.map((entry) => (
                       <Cell key={entry.category} fill={categoryColors[entry.category]} />
@@ -66,7 +82,7 @@ export function CategoryBreakdownChart() {
                   <AnimatedCurrency value={total} currency={currency} compact />
                 </span>
               </div>
-            </div>
+            </ChartFigure>
 
             <ul className="w-full space-y-2.5">
               {categories.map((item) => (

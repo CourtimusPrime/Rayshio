@@ -31,7 +31,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T;
 }
 
-export function apiGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+export function apiGet<T>(
+  path: string,
+  params?: Record<string, string | number | undefined>,
+): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== '') query.set(key, String(value));

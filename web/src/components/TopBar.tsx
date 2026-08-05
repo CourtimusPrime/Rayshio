@@ -68,13 +68,13 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
         </form>
 
         {months.length > 1 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => previousMonth && setMonth(previousMonth)}
               disabled={!previousMonth}
               aria-label="Previous month"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -89,7 +89,7 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
               onClick={() => nextMonth && setMonth(nextMonth)}
               disabled={!nextMonth}
               aria-label="Next month"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -106,7 +106,7 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
             <select
               value={currency ?? ''}
               onChange={(event) => setCurrency(event.target.value)}
-              className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote font-medium text-ink-900 hover:bg-canvas"
+              className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote font-medium text-ink-900 transition-colors hover:bg-canvas"
             >
               {currencies.map((code) => (
                 <option key={code} value={code}>
@@ -139,7 +139,7 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
             type="button"
             onClick={() => logout.mutate()}
             aria-label="Sign out"
-            className="rounded-md p-1 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
+            className="press tap rounded-md p-1 text-ink-400 transition-colors hover:bg-canvas hover:text-ink-900"
           >
             <LogOutIcon className="h-4 w-4" strokeWidth={1.75} />
           </button>
