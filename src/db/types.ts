@@ -87,6 +87,67 @@ export interface ClientAccount {
   status: Generated<string>;
 }
 
+export interface ClientApiKey {
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  id: Generated<Int8>;
+  /**
+   * sha256 hex of the raw key; the raw key is never stored
+   */
+  key_hash: string;
+  key_prefix: string;
+  last_used_at: Timestamp | null;
+  name: Generated<string>;
+  org_id: Int8;
+  revoked_at: Timestamp | null;
+}
+
+export interface ClientAuthAccount {
+  access_token: string | null;
+  access_token_expires_at: Timestamp | null;
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  id: string;
+  id_token: string | null;
+  password: string | null;
+  provider_id: string;
+  refresh_token: string | null;
+  refresh_token_expires_at: Timestamp | null;
+  scope: string | null;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
+export interface ClientAuthSession {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: string;
+  ip_address: string | null;
+  token: string;
+  updated_at: Generated<Timestamp>;
+  user_agent: string | null;
+  user_id: string;
+}
+
+export interface ClientAuthUser {
+  created_at: Generated<Timestamp>;
+  email: string;
+  email_verified: Generated<boolean>;
+  id: string;
+  image: string | null;
+  name: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface ClientAuthVerification {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: string;
+  identifier: string;
+  updated_at: Generated<Timestamp>;
+  value: string;
+}
+
 export interface ClientBillingAddress {
   address: string;
   id: Generated<Int8>;
@@ -110,6 +171,31 @@ export interface ClientOrg {
   name: string;
 }
 
+export interface ClientOrgInvitation {
+  created_at: Generated<Timestamp>;
+  email: string;
+  expires_at: Generated<Timestamp>;
+  id: Generated<Int8>;
+  invited_by: string | null;
+  org_id: Int8;
+  role: Generated<string>;
+  status: Generated<string>;
+}
+
+export interface ClientOrgMember {
+  created_at: Generated<Timestamp>;
+  id: Generated<Int8>;
+  org_id: Int8;
+  role: Generated<string>;
+  user_id: string;
+}
+
+export interface ClientUserActiveOrg {
+  org_id: Int8;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
 export interface ServerService {
   id: Generated<Int8>;
   name: string;
@@ -121,7 +207,15 @@ export interface DB {
   "billing.invoice_line_items": BillingInvoiceLineItems;
   "billing.invoices": BillingInvoices;
   "client.account": ClientAccount;
+  "client.api_key": ClientApiKey;
+  "client.auth_account": ClientAuthAccount;
+  "client.auth_session": ClientAuthSession;
+  "client.auth_user": ClientAuthUser;
+  "client.auth_verification": ClientAuthVerification;
   "client.billing_address": ClientBillingAddress;
   "client.org": ClientOrg;
+  "client.org_invitation": ClientOrgInvitation;
+  "client.org_member": ClientOrgMember;
+  "client.user_active_org": ClientUserActiveOrg;
   "server.service": ServerService;
 }
