@@ -11,63 +11,83 @@
  * on a button still passes, while accent-strong lightens because it is only ever
  * used as text on accent-soft. Surfaces sit just above the canvas rather than
  * below it, since raised panels read as lighter in a dark UI.
+ *
+ * Every value is a space-separated sRGB channel triplet rather than a hex, so
+ * Tailwind can compose opacity modifiers: `rgb(var(--x) / <alpha-value>)` in the
+ * config makes `bg-surface`, `bg-surface/72` and `text-ink-500/60` all work.
+ * With a raw `var()` colour Tailwind emits the value verbatim and drops the
+ * alpha, which silently rendered every translucent surface fully opaque.
+ * The hex each triplet came from is kept alongside it.
  */
 :root {
-  --canvas: #fbfbfc;
-  --surface: #ffffff;
-  --line: #ececf0;
-  --line-strong: #e0e0e6;
-  --ink-900: #1c1c20;
-  --ink-700: #3f3f46;
-  --ink-500: #71717a;
-  --ink-400: #9b9ba3;
-  --accent: #0f766e;
-  --accent-soft: #e6f2f1;
-  --accent-strong: #0b5c56;
-  --warn-soft: #fffbeb;
-  --warn-text: #b45309;
-  --warn-solid: #f59e0b;
-  --danger-soft: #fef2f2;
-  --danger-text: #be123c;
-  --danger-solid: #f43f5e;
+  --canvas: 251 251 252; /* #fbfbfc */
+  --surface: 255 255 255; /* #ffffff */
+  --line: 236 236 240; /* #ececf0 */
+  --line-strong: 224 224 230; /* #e0e0e6 */
+  --ink-900: 28 28 32; /* #1c1c20 */
+  --ink-700: 63 63 70; /* #3f3f46 */
+  --ink-500: 113 113 122; /* #71717a */
+  --ink-400: 155 155 163; /* #9b9ba3 */
+  --accent: 15 118 110; /* #0f766e */
+  --accent-soft: 230 242 241; /* #e6f2f1 */
+  --accent-strong: 11 92 86; /* #0b5c56 */
+  --warn-soft: 255 251 235; /* #fffbeb */
+  --warn-text: 180 83 9; /* #b45309 */
+  --warn-solid: 245 158 11; /* #f59e0b */
+  --danger-soft: 254 242 242; /* #fef2f2 */
+  --danger-text: 190 18 60; /* #be123c */
+  --danger-solid: 244 63 94; /* #f43f5e */
   --shadow-card: 0 1px 2px rgba(24, 24, 28, 0.04);
   --shadow-pop: 0 6px 24px rgba(24, 24, 28, 0.08);
 
+  /*
+   * A scrim dims, so it cannot be --ink-900: that inverts with the theme, and
+   * in dark it is near-white — a wash that lightens the page instead of pushing
+   * it back. Dark in both themes, deeper in dark because there is less contrast
+   * left to borrow.
+   */
+  --scrim: 24 24 28;
+  --scrim-opacity: 0.32;
+
   /* consumed by the charts, which take colours as props rather than classes */
-  --chart-grid: #f2f2f5;
-  --chart-cursor: #fafafa;
-  --chart-axis: #9b9ba3;
-  --chart-tick: #71717a;
-  --chart-bar-muted: #cfe4e2;
+  --chart-accent: var(--accent);
+  --chart-grid: 242 242 245; /* #f2f2f5 */
+  --chart-cursor: 250 250 250; /* #fafafa */
+  --chart-axis: 155 155 163; /* #9b9ba3 */
+  --chart-tick: 113 113 122; /* #71717a */
+  --chart-bar-muted: 207 228 226; /* #cfe4e2 */
   color-scheme: light;
 }
 
 .dark {
-  --canvas: #0f0f12;
-  --surface: #17171b;
-  --line: #26262c;
-  --line-strong: #33333b;
-  --ink-900: #f2f2f4;
-  --ink-700: #c8c8ce;
-  --ink-500: #9a9aa3;
-  --ink-400: #74747d;
-  --accent: #0d9488;
-  --accent-soft: #12312e;
-  --accent-strong: #5eead4;
-  --warn-soft: #2a2010;
-  --warn-text: #fbbf24;
-  --warn-solid: #f59e0b;
-  --danger-soft: #2c1418;
-  --danger-text: #fda4af;
-  --danger-solid: #f43f5e;
+  --canvas: 15 15 18; /* #0f0f12 */
+  --surface: 23 23 27; /* #17171b */
+  --line: 38 38 44; /* #26262c */
+  --line-strong: 51 51 59; /* #33333b */
+  --ink-900: 242 242 244; /* #f2f2f4 */
+  --ink-700: 200 200 206; /* #c8c8ce */
+  --ink-500: 154 154 163; /* #9a9aa3 */
+  --ink-400: 116 116 125; /* #74747d */
+  --accent: 13 148 136; /* #0d9488 */
+  --accent-soft: 18 49 46; /* #12312e */
+  --accent-strong: 94 234 212; /* #5eead4 */
+  --warn-soft: 42 32 16; /* #2a2010 */
+  --warn-text: 251 191 36; /* #fbbf24 */
+  --warn-solid: 245 158 11; /* #f59e0b */
+  --danger-soft: 44 20 24; /* #2c1418 */
+  --danger-text: 253 164 175; /* #fda4af */
+  --danger-solid: 244 63 94; /* #f43f5e */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.5);
 
-  --chart-grid: #26262c;
-  --chart-cursor: #1e1e24;
-  --chart-axis: #74747d;
-  --chart-tick: #9a9aa3;
-  --chart-bar-muted: #1f4d48;
+  --scrim: 0 0 0;
+  --scrim-opacity: 0.55;
+
+  --chart-grid: 38 38 44; /* #26262c */
+  --chart-cursor: 30 30 36; /* #1e1e24 */
+  --chart-axis: 116 116 125; /* #74747d */
+  --chart-tick: 154 154 163; /* #9a9aa3 */
+  --chart-bar-muted: 31 77 72; /* #1f4d48 */
   color-scheme: dark;
 }
 
@@ -80,14 +100,22 @@ body,
 body {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-color: var(--surface);
-  color: var(--ink-900);
+  background-color: rgb(var(--surface));
+  color: rgb(var(--ink-900));
 }
 .tnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum';
 }
+/*
+ * Modal dimming. A class rather than a Tailwind colour because the opacity is
+ * itself a themed token — dark needs a deeper scrim than light, and an opacity
+ * modifier in the class name could not vary with the theme.
+ */
+.scrim {
+  background-color: rgb(var(--scrim) / var(--scrim-opacity));
+}
 *:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
 }
