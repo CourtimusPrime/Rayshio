@@ -46,7 +46,7 @@ export function SignIn() {
           </div>
         )}
 
-        <GoogleButton label={SIGN_IN.cta} next={next} className="mt-6 w-full" />
+        <GoogleButton label={SIGN_IN.cta} next={next} className="mt-6" block />
       </div>
     </main>
   );
