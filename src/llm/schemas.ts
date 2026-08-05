@@ -28,6 +28,19 @@ export const lineItemSchema = z.object({
 });
 
 export const extractionSchema = z.object({
+  /**
+   * The company that issued the invoice.
+   *
+   * Only uploaded PDFs use it: a Gmail-ingested invoice already knows its
+   * vendor from the sending address, which is more reliable than anything read
+   * off the page. Nullable because plenty of invoices bury the issuer in a
+   * logo, and a guess is worse than an honest absence.
+   *
+   * Defaulted rather than required, so a model that omits the field cannot fail
+   * an extraction outright. The Gmail path does not need this value at all, and
+   * regressing that path to add a field only uploads use would be a poor trade.
+   */
+  vendor_name: z.string().nullable().default(null),
   invoice_number: z.string().nullable(),
   currency: z.string().length(3),
   total_minor: z.number().int(),

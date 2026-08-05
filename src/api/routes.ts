@@ -1,4 +1,4 @@
-import { type Request, Router } from 'express';
+import express, { type Request, Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/context.js';
 import { normalizeCategory } from '../categories.js';
@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
+import { createUploadedInvoice } from '../pipeline/uploads.js';
 import {
   ConversionTracker,
   convertInvoices,
@@ -404,6 +405,43 @@ export function apiRouter(): Router {
       })),
     });
   });
+
+  /**
+   * One PDF per request, as a raw body.
+   *
+   * Deliberately not multipart: a batch upload is N of these rather than one
+   * request carrying N files, which needs no multipart dependency, lets one
+   * corrupt PDF fail on its own instead of taking the batch with it, and gives
+   * the client per-file progress for free.
+   *
+   * Responds 202 as soon as the row exists. Extraction runs on the worker, so
+   * twenty PDFs are twenty quick requests rather than one request held open
+   * through twenty LLM round-trips.
+   */
+  router.post(
+    '/invoices/upload',
+    express.raw({ type: 'application/pdf', limit: '20mb' }),
+    async (req, res) => {
+      const orgId = orgOf(req);
+      const body = req.body as unknown;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        throw new BadRequest('expected a PDF body with Content-Type: application/pdf');
+      }
+      // Check the magic bytes, not the extension or the declared content type —
+      // both are supplied by the caller, and a non-PDF would otherwise fail much
+      // later, as an opaque "no usable text" extraction failure.
+      if (body.subarray(0, 5).toString('latin1') !== '%PDF-') {
+        throw new BadRequest('that file is not a PDF');
+      }
+
+      const rawName = optionalString(req.query.filename) ?? 'upload.pdf';
+      // the filename is stored and displayed; keep it to something harmless
+      const filename = rawName.replace(/[^\w. -]+/g, '-').slice(0, 200);
+
+      const uploaded = await createUploadedInvoice(orgId, filename, body);
+      res.status(202).json({ invoice_id: uploaded.invoiceId, filename: uploaded.filename });
+    },
+  );
 
   router.get('/invoices/:id/pdf', async (req, res) => {
     const orgId = orgOf(req);

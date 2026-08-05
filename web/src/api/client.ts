@@ -46,3 +46,32 @@ export function apiGet<T>(
 export function apiSend<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) {
   return request<T>(method, `/api${path}`, body);
 }
+
+/**
+ * Posts one file as a raw body, which is what `/invoices/upload` expects.
+ *
+ * Not FormData: the server takes a single PDF per request so that one corrupt
+ * file fails on its own rather than taking a batch with it, and so a multipart
+ * parser is not needed on either side. The filename travels in the query string
+ * because the body is the file itself.
+ */
+export async function apiUploadPdf<T>(file: File): Promise<T> {
+  const res = await fetch(`/api/invoices/upload?filename=${encodeURIComponent(file.name)}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/pdf' },
+    body: file,
+  });
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const payload = (await res.json()) as { error?: string };
+      if (payload.error) message = payload.error;
+    } catch {
+      // non-JSON error body — keep the status text
+    }
+    throw new ApiError(res.status, message);
+  }
+  return (await res.json()) as T;
+}

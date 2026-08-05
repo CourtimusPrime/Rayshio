@@ -25,7 +25,27 @@ const valid = {
 
 describe('extractionSchema', () => {
   it('accepts a valid extraction', () => {
-    expect(extractionSchema.parse(valid)).toEqual(valid);
+    expect(extractionSchema.parse(valid)).toEqual({ ...valid, vendor_name: null });
+  });
+
+  /*
+   * vendor_name is only used to attribute an uploaded PDF to a vendor. The
+   * Gmail path takes the vendor from the sending address and never reads it, so
+   * a model that omits the field must not fail an extraction that would
+   * otherwise have succeeded.
+   */
+  it('defaults a missing vendor_name to null rather than failing', () => {
+    const parsed = extractionSchema.parse(valid);
+    expect(parsed.vendor_name).toBeNull();
+  });
+
+  it('keeps a vendor_name when the model supplies one', () => {
+    const parsed = extractionSchema.parse({ ...valid, vendor_name: 'Anthropic' });
+    expect(parsed.vendor_name).toBe('Anthropic');
+  });
+
+  it('accepts an explicit null vendor_name', () => {
+    expect(extractionSchema.safeParse({ ...valid, vendor_name: null }).success).toBe(true);
   });
 
   it('rejects float money', () => {

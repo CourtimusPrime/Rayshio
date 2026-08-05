@@ -5,6 +5,7 @@ import { useInvoices } from '../api/hooks';
 import { InvoiceDrawer } from '../components/InvoiceDrawer';
 import { InvoiceTable } from '../components/InvoiceTable';
 import { EmptyNote, ErrorNote, LoadingLines } from '../components/states';
+import { UploadInvoices } from '../components/UploadInvoices';
 import { useWorkspace } from '../state/workspace';
 
 const PAGE_SIZE = 25;
@@ -53,8 +54,14 @@ export function Invoices() {
           </p>
         </div>
 
+        {/* A fragment, so the progress panel is a sibling in this flex-wrap row
+            and can take a full line of its own. `ml-auto` moves from the search
+            form to the button, making upload the first item in the right-hand
+            cluster rather than something pushed off the end. */}
+        <UploadInvoices buttonClassName="ml-auto" />
+
         <form
-          className="relative ml-auto"
+          className="relative"
           onSubmit={(event) => {
             event.preventDefault();
             setParams(term.trim() ? { q: term.trim() } : {});

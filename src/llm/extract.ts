@@ -15,6 +15,9 @@ Rules:
 - rate_minor is the per-unit rate in minor units; null when the line has no unit rate.
 - Dates in YYYY-MM-DD. currency is the 3-letter ISO code shown on the invoice.
 - period_start/period_end: the billing period (invoice-level, and per-line when shown).
+- vendor_name is the company that ISSUED the invoice (the "from"/"bill from" party),
+  never the customer being billed. Use the vendor's plain trading name — "Anthropic",
+  not "Anthropic, PBC" or "ANTHROPIC PBC INVOICE". Null if you cannot tell.
 
 Also assign each line item a normalized \`category\` from exactly this set:
 - "compute": CPU/memory/instance/container/serverless execution time.

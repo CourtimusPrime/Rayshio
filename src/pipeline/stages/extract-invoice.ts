@@ -7,6 +7,7 @@ import { getPdf } from '../../mongo/pdfs.js';
 import type { JobPayloads } from '../../queue/queues.js';
 import { pdfToText } from '../pdf-text.js';
 import { reconcile } from '../reconcile.js';
+import { attachUploadedInvoiceVendor } from '../uploads.js';
 
 /** Marks the invoice failed with a reason. Business failures are terminal, not retried. */
 async function markFailed(invoiceId: number, reason: string): Promise<string> {
@@ -110,5 +111,10 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
       .execute();
   });
 
-  return `parsed: ${extraction.line_items.length} line items, total ${extraction.total_minor} ${extraction.currency}`;
+  // A no-op unless this invoice came from an upload; a Gmail-ingested one keeps
+  // the vendor its sending address already established.
+  const vendor = await attachUploadedInvoiceVendor(invoiceId, extraction.vendor_name);
+
+  const attribution = vendor ? ` (vendor: ${vendor})` : '';
+  return `parsed: ${extraction.line_items.length} line items, total ${extraction.total_minor} ${extraction.currency}${attribution}`;
 }
