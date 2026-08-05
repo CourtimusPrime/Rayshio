@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { resolveAuthContext } from '../auth/context.js';
+import { isSignedIn, resolveAuthContext } from '../auth/context.js';
 import { login, logout } from './session.js';
 
 /**
@@ -23,10 +23,23 @@ export function publicRouter(): Router {
   router.get('/session', (req, res) => {
     void (async () => {
       const context = await resolveAuthContext(req);
-      res.json({ authenticated: context !== undefined });
+      if (context) {
+        res.json({ authenticated: true, pending: false });
+        return;
+      }
+      /*
+       * `pending` is "signed in, but belongs to no workspace yet" — the state
+       * every new account starts in now that registration is open. It is not
+       * the same as signed out, and conflating the two sends the user back to
+       * the marketing page after a successful sign-in.
+       *
+       * Still only booleans: this route answers unauthenticated callers, so it
+       * reveals nothing about who the user is or which org they might join.
+       */
+      res.json({ authenticated: false, pending: await isSignedIn(req) });
     })().catch((err: unknown) => {
       console.error('session probe failed:', err);
-      res.json({ authenticated: false });
+      res.json({ authenticated: false, pending: false });
     });
   });
 

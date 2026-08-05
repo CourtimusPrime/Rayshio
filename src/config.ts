@@ -61,8 +61,16 @@ const envSchema = z.object({
   /** Origin the app is served from — Better Auth's baseURL and the OAuth callback host. */
   PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   /**
-   * Comma-separated allowlist. Sign-up is gated at launch; an address outside
-   * this list can still get in by holding a pending `client.org_invitation`.
+   * Comma-separated sign-up allowlist. An address outside it can still get in
+   * by holding a pending `client.org_invitation`.
+   *
+   * Empty, or the single entry `*`, means **open registration**. Both spellings
+   * exist because Railway will not store an empty string — it keeps the
+   * previous value — and deleting the variable there has no `--skip-deploys`,
+   * so it would force a deploy just to change a setting.
+   *
+   * Open is safe by construction: registering creates an account with no
+   * `client.org_member` row, which every /api route still refuses.
    */
   ALLOWED_SIGNUP_EMAILS: z
     .string()

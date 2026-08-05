@@ -88,9 +88,14 @@ export const auth = betterAuth({
   },
 
   /*
-   * Sign-up is allowlisted at launch. The whole multi-tenancy machinery is
-   * built behind this gate, so opening the product later is deleting the
-   * `create.before` hook — not building an onboarding flow.
+   * Sign-up gating. An empty ALLOWED_SIGNUP_EMAILS — or the single entry `*` —
+   * means open registration: anyone with a Google account may create one here.
+   * Any other list closes it to those addresses plus invitation holders.
+   *
+   * Open is safe by design rather than by trust. Creating an account grants no
+   * access to anything: a new user has no `client.org_member` row, so
+   * `resolveAuthContext` yields no org and every /api route still refuses them.
+   * Membership is always a deliberate act (`pnpm cli grant-membership`).
    *
    * Rejection *throws* rather than returning false: throwing an APIError is
    * what Better Auth turns into a clean error redirect back to the sign-in
@@ -101,6 +106,9 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
+          const allowlist = config.ALLOWED_SIGNUP_EMAILS;
+          if (allowlist.length === 0 || allowlist.includes('*')) return;
+
           const email = user.email.trim().toLowerCase();
           if (config.ALLOWED_SIGNUP_EMAILS.includes(email)) return;
           if (await pendingInvitationFor(email)) return;

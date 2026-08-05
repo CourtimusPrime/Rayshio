@@ -47,6 +47,22 @@ export async function resolveAuthContext(req: Request): Promise<AuthContext | un
   return legacyContext(req);
 }
 
+/**
+ * Whether someone is signed in at all, regardless of whether they can see a
+ * tenant.
+ *
+ * `resolveAuthContext` deliberately returns nothing for a user with no
+ * membership, which is right for authorizing a request and wrong for describing
+ * one. Without this distinction a signed-in user with no workspace is
+ * indistinguishable from a stranger, so the SPA renders the marketing page at
+ * them — they sign in with Google, succeed, and land back where they started,
+ * apparently signed out, forever.
+ */
+export async function isSignedIn(req: Request): Promise<boolean> {
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+  return session?.user !== undefined;
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const context = await resolveAuthContext(req);

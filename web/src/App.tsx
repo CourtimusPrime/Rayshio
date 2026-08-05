@@ -12,6 +12,7 @@ import { Landing } from './pages/Landing';
 import { Privacy, Terms } from './pages/Legal';
 import { Mcp } from './pages/Mcp';
 import { NotFound } from './pages/NotFound';
+import { NoWorkspace } from './pages/NoWorkspace';
 import { Reports } from './pages/Reports';
 import { SignIn } from './pages/SignIn';
 import { APP_TITLES, isAppPath } from './routes';
@@ -29,6 +30,14 @@ export function App() {
       </div>
     );
   }
+
+  /*
+   * `pending` is a signed-in account that belongs to no workspace — the state
+   * every new registration starts in. Falling through to PublicRoutes here
+   * would render the marketing page at someone who just signed in
+   * successfully, so they would try again, and again.
+   */
+  if (data?.pending) return <NoWorkspace />;
 
   if (!data?.authenticated) return <PublicRoutes />;
 

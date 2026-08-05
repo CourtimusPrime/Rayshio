@@ -39,7 +39,7 @@ function retryUnlessUnauthorized(failureCount: number, error: Error): boolean {
 export function useSession() {
   return useQuery({
     queryKey: ['session'],
-    queryFn: () => apiGet<{ authenticated: boolean }>('/session'),
+    queryFn: () => apiGet<{ authenticated: boolean; pending: boolean }>('/session'),
     retry: false,
   });
 }
