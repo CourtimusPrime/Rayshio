@@ -203,6 +203,30 @@
 }
 
 /*
+ * The one-shot theme cross-fade, gated on an attribute that state/theme.tsx
+ * sets for the duration of a flip and then removes. A permanent transition on
+ * these properties would put a lag on every hover in the app.
+ *
+ * Declared before the reduced-motion block and deliberately not disabled by it:
+ * a colour cross-fade is non-vestibular, and easing an abrupt brightness jump
+ * is precisely what a reduced-motion user wants — the alternative is the hard
+ * flash, not stillness.
+ */
+html[data-theme-transition],
+html[data-theme-transition] *,
+html[data-theme-transition] *::before,
+html[data-theme-transition] *::after {
+  transition:
+    background-color 260ms var(--ease-out-apple),
+    border-color 260ms var(--ease-out-apple),
+    color 260ms var(--ease-out-apple),
+    fill 260ms var(--ease-out-apple),
+    stroke 260ms var(--ease-out-apple),
+    box-shadow 260ms var(--ease-out-apple) !important;
+  transition-delay: 0ms !important;
+}
+
+/*
  * The floor for reduced motion. Colour and opacity *changes* survive — they
  * just become instant — because the ask is a gentler equivalent, not the
  * removal of feedback. Components that animate imperatively (count-ups, the

@@ -4,7 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
     <title>InvoiceMCP</title>
+    <script>
+      /*
+       * Resolves the theme before first paint. Without this a dark-preference
+       * user gets a white flash for as long as it takes React to mount, because
+       * the `dark` class is applied from an effect.
+       *
+       * This duplicates the resolution in src/state/theme.tsx by necessity — it
+       * has to run before any module loads. The storage key must match
+       * STORAGE_KEY there.
+       */
+      (function () {
+        try {
+          var pref = localStorage.getItem('invoicemcp.theme');
+          var dark =
+            pref === 'dark' ||
+            ((pref === 'system' || pref === null) &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {
+          /* storage blocked — fall through to the light default */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
+/** Also read by the pre-paint script in index.html — keep the two in step. */
 const STORAGE_KEY = 'invoicemcp.theme';
+
+/** How long the one-shot colour cross-fade below runs for. */
+const THEME_FADE_MS = 260;
 
 interface ThemeValue {
   /** What the user chose, including 'system'. */
@@ -42,9 +55,35 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const theme: ResolvedTheme = preference === 'system' ? system : preference;
 
-  // the whole palette hangs off this one class (see index.css)
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+  /*
+   * The whole palette hangs off this one class (see index.css).
+   *
+   * Layout effect, not effect: the class has to be on <html> before paint, and
+   * before anything reads a resolved custom property off it.
+   *
+   * Flipping theme swaps every colour in the app at once, which is an abrupt
+   * brightness change. A blanket transition would make every hover feel laggy,
+   * so instead an attribute turns one on for the length of the flip and takes
+   * it off again. The first run is skipped — that is the pre-paint script's
+   * class being confirmed, not a change the user made.
+   */
+  const isFirstRun = useRef(true);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    root.style.colorScheme = theme;
+
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+
+    root.setAttribute('data-theme-transition', '');
+    const timer = window.setTimeout(
+      () => root.removeAttribute('data-theme-transition'),
+      THEME_FADE_MS + 40,
+    );
+    return () => window.clearTimeout(timer);
   }, [theme]);
 
   const setPreference = useCallback((next: ThemePreference) => {
