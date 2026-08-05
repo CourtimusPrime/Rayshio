@@ -387,6 +387,12 @@
   }
 }
 
+/* Applied while a modal owns the screen; see hooks/useScrollLock.ts. */
+html.scroll-locked,
+html.scroll-locked body {
+  overflow: hidden;
+}
+
 @layer utilities {
   /*
    * The system font ships proportional figures, so without this every animated

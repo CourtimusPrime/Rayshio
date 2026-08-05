@@ -33,6 +33,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Modals portal here. A *sibling* of #root, not a child: the drawer marks
+      #root inert while it is open, and anything inside #root would be made
+      inert along with the page it is meant to sit above.
+    -->
+    <div id="overlay-root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
