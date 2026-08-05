@@ -17,7 +17,11 @@ export function useMotionPrefs() {
     reduced,
     /** A named spring, or the flat cross-fade when motion is unwelcome. */
     spring: (key: keyof typeof SPRING = 'ui') => (reduced ? FADE : SPRING[key]),
-    /** Pick between a moving value and a still one. */
-    pick: <T>(moving: T, still: T): T => (reduced ? still : moving),
+    /**
+     * Pick between a moving value and a still one. The two are allowed to
+     * differ in type: framer's `initial` takes either a target object or the
+     * literal `false`, which means "start where you are meant to end up".
+     */
+    pick: <A, B>(moving: A, still: B): A | B => (reduced ? still : moving),
   };
 }

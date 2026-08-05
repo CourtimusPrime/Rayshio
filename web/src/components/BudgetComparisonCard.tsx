@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { AlertTriangleIcon, CheckIcon, PencilIcon, TrendingUpIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useSetBudget, useSummary } from '../api/hooks';
+import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency } from '../utils/format';
 import { AnimatedCount, AnimatedCurrency } from './AnimatedNumber';
@@ -39,6 +40,7 @@ export function BudgetComparisonCard() {
   const setBudget = useSetBudget();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const prefs = useMotionPrefs();
 
   if (error) {
     return (
@@ -193,8 +195,16 @@ export function BudgetComparisonCard() {
       {editing && editor}
 
       <div className="mt-6">
+        {/*
+          `contain` rather than a scaleX transform. The fill is 10px tall with
+          fully rounded caps, and scaleX squashes the right cap from a
+          semicircle into a narrow ellipse — visibly wrong at this size. The
+          usual objection to animating width is layout invalidation, and
+          containment answers it directly: the track has a fixed height in a
+          settled grid, so the animation cannot dirty an ancestor's layout.
+        */}
         <div
-          className="relative h-2.5 w-full overflow-hidden rounded-full bg-line"
+          className="relative h-2.5 w-full overflow-hidden rounded-full bg-line [contain:layout_paint]"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={budget}
@@ -203,9 +213,11 @@ export function BudgetComparisonCard() {
         >
           <motion.div
             className={`h-full rounded-full ${style.bar}`}
-            initial={{ width: 0 }}
+            // no sweep at all under reduced motion: initial={false} starts at
+            // the animate value rather than travelling to it
+            initial={prefs.pick({ width: 0 }, false)}
             animate={{ width: `${Math.min(ratio, 1) * 100}%` }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={prefs.spring('ui')}
           />
         </div>
         <div className="mt-2 flex items-center justify-between text-micro text-ink-400">

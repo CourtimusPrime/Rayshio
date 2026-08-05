@@ -3,6 +3,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useCategories } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
+import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { useWorkspace } from '../state/workspace';
 import { formatCurrency } from '../utils/format';
 import { ServiceLogo } from './ServiceLogo';
@@ -14,6 +15,7 @@ export function CategoryDetailList() {
   const { currency, month } = useWorkspace();
   const { data, isPending, error } = useCategories(currency, month);
   const [open, setOpen] = useState<string[]>([]);
+  const prefs = useMotionPrefs();
 
   const categories = data?.categories ?? [];
   const total = categories.reduce((sum, item) => sum + item.total_minor, 0);
@@ -70,7 +72,7 @@ export function CategoryDetailList() {
                     type="button"
                     onClick={() => toggle(category.category)}
                     aria-expanded={isOpen}
-                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-canvas md:px-6"
+                    className="press-row flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-canvas md:px-6"
                   >
                     <span
                       className="h-8 w-1.5 shrink-0 rounded-full"
@@ -108,7 +110,10 @@ export function CategoryDetailList() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        // critically damped on purpose: an overshoot on
+                        // height:'auto' pushes past the measured height and
+                        // clips against the wrapper, snapping at the end
+                        transition={prefs.spring('quick')}
                         className="overflow-hidden"
                       >
                         <ul className="border-t border-line bg-canvas px-5 py-2 md:px-6">
