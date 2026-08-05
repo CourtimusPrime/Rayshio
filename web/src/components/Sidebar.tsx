@@ -28,10 +28,10 @@ export function Sidebar() {
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-line bg-surface md:h-full md:w-60 md:border-b-0 md:border-r">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-[13px] font-semibold text-canvas">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-footnote font-semibold text-canvas">
           iM
         </span>
-        <span className="text-[15px] font-semibold tracking-tight text-ink-900">InvoiceMCP</span>
+        <span className="text-subhead font-semibold text-ink-900">InvoiceMCP</span>
       </div>
 
       <nav aria-label="Main" className="px-3">
@@ -42,7 +42,7 @@ export function Sidebar() {
                 to={to}
                 end={end}
                 className={({ isActive }) =>
-                  `flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors ${
+                  `flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-body transition-colors ${
                     isActive
                       ? 'bg-accent-soft font-medium text-accent-strong'
                       : 'text-ink-500 hover:bg-canvas hover:text-ink-900'
@@ -69,10 +69,10 @@ export function Sidebar() {
         <div className="hidden rounded-xl border border-line bg-canvas p-3.5 md:block">
           <div className="flex items-center gap-2">
             <TerminalIcon className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
-            <span className="text-xs font-medium text-ink-900">MCP server</span>
+            <span className="text-caption font-medium text-ink-900">MCP server</span>
             <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
           </div>
-          <p className="mt-2 break-all font-mono text-[11px] leading-relaxed text-ink-500">
+          <p className="mt-2 break-all font-mono text-micro leading-relaxed text-ink-500">
             {endpoint ?? '—'}
           </p>
         </div>

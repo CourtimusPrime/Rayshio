@@ -46,8 +46,8 @@ function brandFor(name: string): { bg: string; fg: string } {
 const MARK_INK = '#1c1c20';
 
 const SIZES = {
-  sm: { frame: 'h-7 w-7', pad: 'p-1', glyph: 20, text: 'text-[11px]' },
-  md: { frame: 'h-9 w-9', pad: 'p-1.5', glyph: 24, text: 'text-[13px]' },
+  sm: { frame: 'h-7 w-7', pad: 'p-1', glyph: 20, text: 'text-micro' },
+  md: { frame: 'h-9 w-9', pad: 'p-1.5', glyph: 24, text: 'text-footnote' },
 } as const;
 
 interface ServiceLogoProps {

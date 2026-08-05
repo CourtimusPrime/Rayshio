@@ -72,7 +72,7 @@ export function Reports() {
                 role="tab"
                 aria-selected={type === value}
                 onClick={() => switchType(value)}
-                className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${
+                className={`rounded-md px-3 py-1.5 text-footnote transition-colors ${
                   type === value
                     ? 'bg-accent-soft font-medium text-accent-strong'
                     : 'text-ink-500 hover:bg-canvas hover:text-ink-900'
@@ -93,7 +93,7 @@ export function Reports() {
             >
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
             </button>
-            <span className="min-w-[7rem] text-center text-[13px] font-medium text-ink-900">
+            <span className="min-w-[7rem] text-center text-footnote font-medium text-ink-900">
               {data?.period.label ?? '—'}
             </span>
             <button
@@ -108,7 +108,7 @@ export function Reports() {
           </div>
 
           {/* the FY naming convention is not universal — always show the range */}
-          <span className="text-xs text-ink-500">{data?.period.rangeLabel}</span>
+          <span className="text-caption text-ink-500">{data?.period.rangeLabel}</span>
 
           <div className="ml-auto">
             <FiscalYearSetting />
@@ -132,19 +132,19 @@ export function Reports() {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 id="report-total-heading" className="text-sm font-medium text-ink-500">
+                <h2 id="report-total-heading" className="text-body font-medium text-ink-500">
                   Total spend · {data.period.label}
                 </h2>
-                <p className="tnum mt-2 text-[32px] font-semibold leading-none tracking-tight text-ink-900">
+                <p className="tnum mt-2 text-display font-semibold text-ink-900">
                   <AnimatedCurrency value={data.current_total_minor} currency={currency} />
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2.5 py-1 text-xs font-medium text-ink-500">
+              <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2.5 py-1 text-caption font-medium text-ink-500">
                 {delta === null ? 'no prior period' : formatPercent(delta)}
               </span>
             </div>
 
-            <p className="mt-2 text-[13px] text-ink-500">
+            <p className="mt-2 text-footnote text-ink-500">
               <span className="tnum text-ink-700">
                 <AnimatedCurrency value={data.previous_total_minor} currency={currency} />
               </span>{' '}
@@ -180,20 +180,20 @@ export function Reports() {
 
             <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
               <div>
-                <dt className="text-[11px] uppercase tracking-wide text-ink-400">Invoices</dt>
-                <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+                <dt className="text-micro uppercase tracking-wide text-ink-400">Invoices</dt>
+                <dd className="tnum mt-1 text-body font-medium text-ink-900">
                   <AnimatedCount value={data.invoice_count} />
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] uppercase tracking-wide text-ink-400">Services</dt>
-                <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+                <dt className="text-micro uppercase tracking-wide text-ink-400">Services</dt>
+                <dd className="tnum mt-1 text-body font-medium text-ink-900">
                   <AnimatedCount value={data.service_count} />
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] uppercase tracking-wide text-ink-400">Avg / invoice</dt>
-                <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+                <dt className="text-micro uppercase tracking-wide text-ink-400">Avg / invoice</dt>
+                <dd className="tnum mt-1 text-body font-medium text-ink-900">
                   {data.invoice_count === 0 ? (
                     '—'
                   ) : (
@@ -213,10 +213,10 @@ export function Reports() {
             aria-labelledby="report-vendors-heading"
             className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
           >
-            <h2 id="report-vendors-heading" className="text-sm font-medium text-ink-900">
+            <h2 id="report-vendors-heading" className="text-body font-medium text-ink-900">
               Top vendors by spend
             </h2>
-            <p className="mt-1 text-xs text-ink-500">{data.period.rangeLabel}, parsed invoices only</p>
+            <p className="mt-1 text-caption text-ink-500">{data.period.rangeLabel}, parsed invoices only</p>
 
             <div className="mt-5">
               {services.length === 0 ? (
@@ -268,10 +268,10 @@ export function Reports() {
             className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
           >
             <div className="px-5 py-4 md:px-6">
-              <h2 id="report-categories-heading" className="text-sm font-medium text-ink-900">
+              <h2 id="report-categories-heading" className="text-body font-medium text-ink-900">
                 Spend by category
               </h2>
-              <p className="mt-1 text-xs text-ink-500">
+              <p className="mt-1 text-caption text-ink-500">
                 Rolled up across every vendor for {data.period.label}
               </p>
             </div>
@@ -291,10 +291,10 @@ export function Reports() {
                         aria-hidden="true"
                       />
                       <span className="min-w-0">
-                        <span className="block text-[13px] font-medium text-ink-900">
+                        <span className="block text-footnote font-medium text-ink-900">
                           {categoryLabel(category.category)}
                         </span>
-                        <span className="tnum mt-0.5 block text-xs text-ink-500">
+                        <span className="tnum mt-0.5 block text-caption text-ink-500">
                           {category.services.length} vendors ·{' '}
                           {categoryTotal === 0
                             ? 0
@@ -308,7 +308,7 @@ export function Reports() {
                             <ServiceLogo key={s.service} name={s.service} />
                           ))}
                         </span>
-                        <span className="tnum text-sm font-medium text-ink-900">
+                        <span className="tnum text-body font-medium text-ink-900">
                           <AnimatedCurrency value={category.total_minor} currency={currency} />
                         </span>
                       </span>

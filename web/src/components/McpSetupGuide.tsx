@@ -98,22 +98,22 @@ export function McpSetupGuide() {
         aria-labelledby="mcp-endpoint-heading"
         className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
-        <h2 id="mcp-endpoint-heading" className="text-sm font-medium text-ink-900">
+        <h2 id="mcp-endpoint-heading" className="text-body font-medium text-ink-900">
           Connect InvoiceMCP to your AI client
         </h2>
-        <p className="mt-1 max-w-xl text-xs leading-relaxed text-ink-500">
+        <p className="mt-1 max-w-xl text-caption leading-relaxed text-ink-500">
           Pick your client below and paste the config. Agents get read-only access to your parsed
           invoices — nothing is written back to Gmail.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <code className="rounded-lg bg-canvas px-3 py-2 font-mono text-[12px] text-ink-700 ring-1 ring-line">
+          <code className="rounded-lg bg-canvas px-3 py-2 font-mono text-code text-ink-700 ring-1 ring-line">
             {endpoint}
           </code>
           <button
             type="button"
             onClick={() => copy('endpoint', endpoint)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-2 text-xs font-medium text-ink-700 transition-colors hover:bg-canvas"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-2 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
           >
             {copied === 'endpoint' ? (
               <CheckIcon className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
@@ -124,7 +124,7 @@ export function McpSetupGuide() {
           </button>
         </div>
 
-        <p className="mt-3 text-xs text-ink-400">
+        <p className="mt-3 text-caption text-ink-400">
           Replace <code className="font-mono">{TOKEN_PLACEHOLDER}</code> with the value of{' '}
           <code className="font-mono">MCP_API_KEY</code> from your server environment. The dashboard
           never displays it.
@@ -152,7 +152,7 @@ export function McpSetupGuide() {
                 aria-selected={isActive}
                 aria-controls={`panel-${client.id}`}
                 onClick={() => setActiveId(client.id)}
-                className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-[13px] transition-colors ${
+                className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-footnote transition-colors ${
                   isActive
                     ? 'bg-accent-soft font-medium text-accent-strong'
                     : 'text-ink-500 hover:bg-canvas hover:text-ink-900'
@@ -172,16 +172,16 @@ export function McpSetupGuide() {
         >
           <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
             <div>
-              <p className="text-[13px] font-medium text-ink-900">{active.name}</p>
-              <p className="mt-0.5 font-mono text-[11px] text-ink-400">{active.subtitle}</p>
+              <p className="text-footnote font-medium text-ink-900">{active.name}</p>
+              <p className="mt-0.5 font-mono text-micro text-ink-400">{active.subtitle}</p>
             </div>
-            <span className="ml-auto rounded-full bg-canvas px-2.5 py-1 text-[11px] font-medium text-ink-500 ring-1 ring-line">
+            <span className="ml-auto rounded-full bg-canvas px-2.5 py-1 text-micro font-medium text-ink-500 ring-1 ring-line">
               {active.configLabel}
             </span>
             <button
               type="button"
               onClick={() => copy(active.id, snippet)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-canvas"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-caption font-medium text-ink-700 transition-colors hover:bg-canvas"
             >
               {copied === active.id ? (
                 <CheckIcon className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
@@ -192,11 +192,11 @@ export function McpSetupGuide() {
             </button>
           </div>
 
-          <pre className="overflow-x-auto border-y border-line bg-canvas px-5 py-4 font-mono text-[12px] leading-relaxed text-ink-700 md:px-6">
+          <pre className="overflow-x-auto border-y border-line bg-canvas px-5 py-4 font-mono text-code leading-relaxed text-ink-700 md:px-6">
             <code>{snippet}</code>
           </pre>
 
-          <p className="px-5 py-3.5 text-xs text-ink-500 md:px-6">{active.hint}</p>
+          <p className="px-5 py-3.5 text-caption text-ink-500 md:px-6">{active.hint}</p>
         </div>
       </section>
 
@@ -204,14 +204,14 @@ export function McpSetupGuide() {
         aria-labelledby="mcp-tools-heading"
         className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
-        <h2 id="mcp-tools-heading" className="text-sm font-medium text-ink-900">
+        <h2 id="mcp-tools-heading" className="text-body font-medium text-ink-900">
           Tools your agent gets
         </h2>
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
           {mcpTools.map((tool) => (
             <li key={tool.name} className="rounded-lg border border-line bg-canvas px-3.5 py-3">
-              <p className="font-mono text-[12px] text-ink-900">{tool.name}</p>
-              <p className="mt-1 text-xs text-ink-500">{tool.description}</p>
+              <p className="font-mono text-code text-ink-900">{tool.name}</p>
+              <p className="mt-1 text-caption text-ink-500">{tool.description}</p>
             </li>
           ))}
         </ul>

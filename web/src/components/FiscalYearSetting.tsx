@@ -29,13 +29,13 @@ export function FiscalYearSetting() {
   return (
     <label className="flex items-center gap-2">
       <CalendarRangeIcon className="h-3.5 w-3.5 text-ink-400" strokeWidth={1.75} />
-      <span className="text-xs text-ink-500">Fiscal year starts</span>
+      <span className="text-caption text-ink-500">Fiscal year starts</span>
       <select
         value={startMonth}
         onChange={(event) =>
           setFiscalYear.mutate({ fiscal_year_start_month: Number(event.target.value) })
         }
-        className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-900 hover:bg-canvas"
+        className="h-8 rounded-lg border border-line bg-surface px-2 text-footnote text-ink-900 hover:bg-canvas"
       >
         {MONTHS.map((name, i) => (
           <option key={name} value={i + 1}>

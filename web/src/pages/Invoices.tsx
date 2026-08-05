@@ -46,8 +46,8 @@ export function Invoices() {
     <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
       <div className="flex flex-wrap items-center gap-3 px-5 py-4 md:px-6">
         <div>
-          <h2 className="text-sm font-medium text-ink-900">All invoices</h2>
-          <p className="tnum mt-1 text-xs text-ink-500">
+          <h2 className="text-body font-medium text-ink-900">All invoices</h2>
+          <p className="tnum mt-1 text-caption text-ink-500">
             {total} invoice{total === 1 ? '' : 's'}
             {query ? ` matching "${query}"` : ''}
           </p>
@@ -71,7 +71,7 @@ export function Invoices() {
               placeholder="Search invoices"
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
+              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-body text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
             />
           </label>
         </form>
@@ -84,7 +84,7 @@ export function Invoices() {
               setStatus(event.target.value);
               setPage(0);
             }}
-            className="h-9 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-ink-900 hover:bg-canvas"
+            className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote text-ink-900 hover:bg-canvas"
           >
             {statuses.map((value) => (
               <option key={value} value={value}>
@@ -113,7 +113,7 @@ export function Invoices() {
       {!error && rows.length > 0 && <InvoiceTable rows={rows} onSelect={setSelected} />}
 
       {!error && total > PAGE_SIZE && (
-        <div className="flex items-center justify-between px-5 py-3 text-xs text-ink-500 md:px-6">
+        <div className="flex items-center justify-between px-5 py-3 text-caption text-ink-500 md:px-6">
           <span className="tnum">
             {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>

@@ -30,8 +30,8 @@ export function TopBar({ title }: { title: string }) {
   return (
     <header className="flex flex-wrap items-center gap-4 border-b border-line bg-surface/90 px-5 py-4 backdrop-blur md:px-8">
       <div className="min-w-0">
-        <h1 className="truncate text-[17px] font-semibold tracking-tight text-ink-900">{title}</h1>
-        <p className="mt-0.5 text-xs text-ink-500">{meta?.org.name ?? '—'} · workspace</p>
+        <h1 className="truncate text-title3 font-semibold text-ink-900">{title}</h1>
+        <p className="mt-0.5 text-caption text-ink-500">{meta?.org.name ?? '—'} · workspace</p>
       </div>
 
       {/* wraps as a group: month nav + currency + account exceed a phone width on one line */}
@@ -54,7 +54,7 @@ export function TopBar({ title }: { title: string }) {
               placeholder="Search invoices"
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
+              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-body text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
             />
           </label>
         </form>
@@ -72,7 +72,7 @@ export function TopBar({ title }: { title: string }) {
             </button>
             <span
               aria-live="polite"
-              className="min-w-[7rem] text-center text-[13px] font-medium text-ink-900 sm:min-w-[8.5rem]"
+              className="min-w-[7rem] text-center text-footnote font-medium text-ink-900 sm:min-w-[8.5rem]"
             >
               {longMonthLabel(month)}
             </span>
@@ -98,7 +98,7 @@ export function TopBar({ title }: { title: string }) {
             <select
               value={currency ?? ''}
               onChange={(event) => setCurrency(event.target.value)}
-              className="h-9 rounded-lg border border-line bg-surface px-2.5 text-[13px] font-medium text-ink-900 hover:bg-canvas"
+              className="h-9 rounded-lg border border-line bg-surface px-2.5 text-footnote font-medium text-ink-900 hover:bg-canvas"
             >
               {currencies.map((code) => (
                 <option key={code} value={code}>
@@ -111,19 +111,19 @@ export function TopBar({ title }: { title: string }) {
 
         <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-left">
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-canvas text-[11px] font-semibold text-ink-700"
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-canvas text-micro font-semibold text-ink-700"
             aria-hidden="true"
           >
             {meta?.account?.provider === 'google' ? 'G' : '@'}
           </span>
           <span className="hidden min-w-0 sm:block">
-            <span className="flex items-center gap-1 text-[13px] font-medium leading-tight text-ink-900">
+            <span className="flex items-center gap-1 text-footnote font-medium leading-tight text-ink-900">
               <span className="truncate">{accountEmail ?? 'No account connected'}</span>
               {connected && (
                 <CheckCircle2Icon className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />
               )}
             </span>
-            <span className="text-[11px] leading-tight text-ink-500">
+            <span className="text-micro leading-tight text-ink-500">
               {connected ? 'Gmail connected' : (meta?.account?.status ?? 'Run pnpm cli auth')}
             </span>
           </span>

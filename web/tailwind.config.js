@@ -19,7 +19,39 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
   theme: {
+    /*
+     * Replaces Tailwind's scale outright rather than extending it. Type is
+     * size, leading and tracking as one decision — a size token that does not
+     * carry its own leading and tracking is an invitation to pick them ad hoc,
+     * which is how this file ended up with ten sizes, six of them arbitrary
+     * bracket values. Dropping the default scale also means text-base/lg/xl are
+     * simply not classes here: reaching for an untuned size fails visibly.
+     *
+     * Tracking tightens as size grows and loosens as it shrinks, because
+     * letterforms read further apart the larger they get. Body sits near zero.
+     */
+    fontSize: {
+      micro: ['0.6875rem', { lineHeight: '0.875rem', letterSpacing: '0.025em' }],
+      caption: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.01em' }],
+      /* mono wants looser leading than proportional text at the same size */
+      code: ['0.75rem', { lineHeight: '1.125rem', letterSpacing: '0em' }],
+      footnote: ['0.8125rem', { lineHeight: '1.125rem', letterSpacing: '0em' }],
+      body: ['0.875rem', { lineHeight: '1.25rem', letterSpacing: '-0.006em' }],
+      subhead: ['0.9375rem', { lineHeight: '1.25rem', letterSpacing: '-0.012em' }],
+      title3: ['1.0625rem', { lineHeight: '1.375rem', letterSpacing: '-0.018em' }],
+      title2: ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.021em' }],
+      title1: ['1.75rem', { lineHeight: '2rem', letterSpacing: '-0.024em' }],
+      display: ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.028em' }],
+    },
     extend: {
+      letterSpacing: {
+        /*
+         * Overrides Tailwind's 0.025em. Only ever paired with uppercase at
+         * 11px, which needs materially more tracking than lowercase at the
+         * same size — the same size-specific reasoning, applied to case.
+         */
+        wide: '0.055em',
+      },
       colors: {
         accent: {
           DEFAULT: token('--accent'),
@@ -51,8 +83,37 @@ export default {
           solid: token('--danger-solid'),
         },
       },
+      /*
+       * The platform font, not a webfont. It already ships optical sizing,
+       * tracking tables and legibility tuning that a downloaded Inter does not
+       * — on Apple platforms the four 32px figures get SF Display metrics and
+       * the 11px labels get SF Text, automatically. It also removes a
+       * render-blocking cross-origin @import from the critical path.
+       */
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"SF Pro Text"',
+          '"Segoe UI Variable Text"',
+          '"Segoe UI"',
+          'system-ui',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif',
+        ],
+        mono: [
+          'ui-monospace',
+          'SFMono-Regular',
+          '"SF Mono"',
+          'Menlo',
+          'Monaco',
+          '"Cascadia Mono"',
+          'Consolas',
+          '"Liberation Mono"',
+          'monospace',
+        ],
       },
       boxShadow: {
         e1: 'var(--shadow-e1)',

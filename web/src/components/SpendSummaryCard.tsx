@@ -57,22 +57,22 @@ function Body({
     <>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 id="spend-summary-heading" className="text-sm font-medium text-ink-500">
+          <h2 id="spend-summary-heading" className="text-body font-medium text-ink-500">
             Total spend · {monthLabel}
           </h2>
-          <p className="tnum mt-2 text-[32px] font-semibold leading-none tracking-tight text-ink-900">
+          <p className="tnum mt-2 text-display font-semibold text-ink-900">
             <AnimatedCurrency value={current} currency={currency} />
           </p>
         </div>
         <span
-          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${chip.className}`}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-caption font-medium ${chip.className}`}
         >
           <chip.Icon className="h-3.5 w-3.5" strokeWidth={2} />
           {delta === null ? 'no prior month' : formatPercent(delta)}
         </span>
       </div>
 
-      <p className="mt-2 text-[13px] text-ink-500">
+      <p className="mt-2 text-footnote text-ink-500">
         <span className="tnum text-ink-700">
           <AnimatedCurrency value={previous} currency={currency} />
         </span>{' '}
@@ -113,20 +113,20 @@ function Body({
 
       <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4">
         <div>
-          <dt className="text-[11px] uppercase tracking-wide text-ink-400">Invoices</dt>
-          <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+          <dt className="text-micro uppercase tracking-wide text-ink-400">Invoices</dt>
+          <dd className="tnum mt-1 text-body font-medium text-ink-900">
             <AnimatedCount value={invoiceCount} />
           </dd>
         </div>
         <div>
-          <dt className="text-[11px] uppercase tracking-wide text-ink-400">Services</dt>
-          <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+          <dt className="text-micro uppercase tracking-wide text-ink-400">Services</dt>
+          <dd className="tnum mt-1 text-body font-medium text-ink-900">
             <AnimatedCount value={serviceCount} />
           </dd>
         </div>
         <div>
-          <dt className="text-[11px] uppercase tracking-wide text-ink-400">Avg / invoice</dt>
-          <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+          <dt className="text-micro uppercase tracking-wide text-ink-400">Avg / invoice</dt>
+          <dd className="tnum mt-1 text-body font-medium text-ink-900">
             {invoiceCount === 0 ? (
               '—'
             ) : (

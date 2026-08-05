@@ -23,10 +23,10 @@ export function ServiceBreakdownChart() {
     >
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <h2 id="service-breakdown-heading" className="text-sm font-medium text-ink-900">
+          <h2 id="service-breakdown-heading" className="text-body font-medium text-ink-900">
             Top vendors by spend
           </h2>
-          <p className="mt-1 text-xs text-ink-500">This month, parsed invoices only</p>
+          <p className="mt-1 text-caption text-ink-500">This month, parsed invoices only</p>
         </div>
       </div>
 

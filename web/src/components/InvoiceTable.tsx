@@ -5,7 +5,7 @@ import { ServiceLogo } from './ServiceLogo';
 import { StatusBadge } from './StatusBadge';
 
 const headerClass =
-  'px-5 py-2.5 text-[11px] font-medium uppercase tracking-wide text-ink-400';
+  'px-5 py-2.5 text-micro font-medium uppercase tracking-wide text-ink-400';
 
 export function InvoiceTable({
   rows,
@@ -54,26 +54,26 @@ export function InvoiceTable({
                 <div className="flex items-center gap-3">
                   <ServiceLogo name={invoice.service} />
                   <span>
-                    <span className="block text-[13px] font-medium text-ink-900">
+                    <span className="block text-footnote font-medium text-ink-900">
                       {invoice.service}
                     </span>
-                    <span className="block font-mono text-[11px] text-ink-400">
+                    <span className="block font-mono text-micro text-ink-400">
                       {invoice.invoice_number ?? '—'}
                     </span>
                   </span>
                 </div>
               </td>
-              <td className="px-5 py-3.5 text-[13px] text-ink-500">{categoryLabel(invoice.category)}</td>
-              <td className="tnum px-5 py-3.5 text-right text-[13px] font-medium text-ink-900">
+              <td className="px-5 py-3.5 text-footnote text-ink-500">{categoryLabel(invoice.category)}</td>
+              <td className="tnum px-5 py-3.5 text-right text-footnote font-medium text-ink-900">
                 {formatCurrency(invoice.converted_value, invoice.display_currency)}
                 {/* what the vendor actually billed, when it differs */}
                 {invoice.is_converted && (
-                  <span className="mt-0.5 block text-[11px] font-normal text-ink-400">
+                  <span className="mt-0.5 block text-micro font-normal text-ink-400">
                     {formatCurrency(invoice.value, invoice.currency)}
                   </span>
                 )}
               </td>
-              <td className="tnum px-5 py-3.5 text-[13px] text-ink-500">
+              <td className="tnum px-5 py-3.5 text-footnote text-ink-500">
                 {invoice.invoice_date
                   ? formatDate(invoice.invoice_date)
                   : formatDate(invoice.delivered_at.slice(0, 10))}

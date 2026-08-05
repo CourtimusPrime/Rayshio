@@ -33,10 +33,10 @@ export function CategoryDetailList() {
       className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
     >
       <div className="px-5 py-4 md:px-6">
-        <h2 id="category-detail-heading" className="text-sm font-medium text-ink-900">
+        <h2 id="category-detail-heading" className="text-body font-medium text-ink-900">
           Itemized costs by category
         </h2>
-        <p className="mt-1 text-xs text-ink-500">
+        <p className="mt-1 text-caption text-ink-500">
           Expand a category to see which services contribute to it
         </p>
       </div>
@@ -78,16 +78,16 @@ export function CategoryDetailList() {
                       aria-hidden="true"
                     />
                     <span className="min-w-0">
-                      <span className="block text-[13px] font-medium text-ink-900">
+                      <span className="block text-footnote font-medium text-ink-900">
                         {categoryLabel(category.category)}
                       </span>
-                      <span className="tnum mt-0.5 block text-xs text-ink-500">
+                      <span className="tnum mt-0.5 block text-caption text-ink-500">
                         {category.services.length} services · {share}% of spend
                       </span>
                     </span>
 
                     <span className="ml-auto flex items-center gap-3">
-                      <span className="tnum text-sm font-medium text-ink-900">
+                      <span className="tnum text-body font-medium text-ink-900">
                         <AnimatedCurrency
                           value={category.total_minor}
                           currency={currency ?? 'USD'}
@@ -119,10 +119,10 @@ export function CategoryDetailList() {
                             >
                               <ServiceLogo name={contribution.service} />
                               <span className="min-w-0">
-                                <span className="block text-[13px] text-ink-900">
+                                <span className="block text-footnote text-ink-900">
                                   {contribution.service}
                                 </span>
-                                <span className="block text-xs text-ink-400">
+                                <span className="block text-caption text-ink-400">
                                   {contribution.note}
                                 </span>
                               </span>
@@ -144,7 +144,7 @@ export function CategoryDetailList() {
                                     }}
                                   />
                                 </span>
-                                <span className="tnum text-[13px] font-medium text-ink-700">
+                                <span className="tnum text-footnote font-medium text-ink-700">
                                   {formatCurrency(contribution.total_minor, currency ?? 'USD')}
                                 </span>
                               </span>
@@ -159,7 +159,7 @@ export function CategoryDetailList() {
             })}
           </ul>
 
-          <div className="flex items-center justify-between px-5 py-3.5 text-xs text-ink-500 md:px-6">
+          <div className="flex items-center justify-between px-5 py-3.5 text-caption text-ink-500 md:px-6">
             <span>
               {categories.length} categor{categories.length === 1 ? 'y' : 'ies'}
             </span>

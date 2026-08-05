@@ -32,7 +32,7 @@ export function LoadingLines({ rows = 3 }: { rows?: number }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3.5 py-3 text-[13px] text-danger-text">
+    <div className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3.5 py-3 text-footnote text-danger-text">
       <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
       <span>{message}</span>
     </div>
@@ -41,7 +41,7 @@ export function ErrorNote({ message }: { message: string }) {
 
 export function EmptyNote({ message }: { message: string }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-canvas px-3.5 py-6 text-[13px] text-ink-500 ring-1 ring-line">
+    <div className="flex items-center gap-2.5 rounded-lg bg-canvas px-3.5 py-6 text-footnote text-ink-500 ring-1 ring-line">
       <InboxIcon className="h-4 w-4 shrink-0 text-ink-400" strokeWidth={1.75} />
       <span>{message}</span>
     </div>

@@ -85,7 +85,7 @@ export function BudgetComparisonCard() {
       }}
     >
       <label className="flex items-center gap-2">
-        <span className="text-[13px] text-ink-500">Monthly budget ({currency})</span>
+        <span className="text-footnote text-ink-500">Monthly budget ({currency})</span>
         <input
           type="number"
           min={0}
@@ -94,19 +94,19 @@ export function BudgetComparisonCard() {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="none"
-          className="tnum h-9 w-32 rounded-lg border border-line bg-canvas px-3 text-sm text-ink-900 focus:border-line-strong focus:bg-surface"
+          className="tnum h-9 w-32 rounded-lg border border-line bg-canvas px-3 text-body text-ink-900 focus:border-line-strong focus:bg-surface"
         />
       </label>
       <button
         type="submit"
-        className="rounded-lg bg-accent px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-accent-strong"
+        className="rounded-lg bg-accent px-3 py-2 text-footnote font-medium text-white transition-colors hover:bg-accent-strong"
       >
         Save
       </button>
       <button
         type="button"
         onClick={() => setEditing(false)}
-        className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-700 transition-colors hover:bg-canvas"
+        className="rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
       >
         Cancel
       </button>
@@ -119,20 +119,20 @@ export function BudgetComparisonCard() {
         aria-labelledby="budget-heading"
         className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
-        <h2 id="budget-heading" className="text-sm font-medium text-ink-500">
+        <h2 id="budget-heading" className="text-body font-medium text-ink-500">
           Last month vs budget · {data.previous_month_label}
         </h2>
-        <p className="tnum mt-2 text-[32px] font-semibold leading-none tracking-tight text-ink-900">
+        <p className="tnum mt-2 text-display font-semibold text-ink-900">
           <AnimatedCurrency value={lastMonth} currency={currency} />
         </p>
-        <p className="mt-2 text-[13px] text-ink-500">No monthly budget set.</p>
+        <p className="mt-2 text-footnote text-ink-500">No monthly budget set.</p>
         {editing ? (
           editor
         ) : (
           <button
             type="button"
             onClick={startEditing}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-700 transition-colors hover:bg-canvas"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
           >
             <PencilIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
             Set a {currency} budget
@@ -155,22 +155,22 @@ export function BudgetComparisonCard() {
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 id="budget-heading" className="text-sm font-medium text-ink-500">
+          <h2 id="budget-heading" className="text-body font-medium text-ink-500">
             Last month vs budget · {data.previous_month_label}
           </h2>
-          <p className="tnum mt-2 text-[32px] font-semibold leading-none tracking-tight text-ink-900">
+          <p className="tnum mt-2 text-display font-semibold text-ink-900">
             <AnimatedCurrency value={lastMonth} currency={currency} />
           </p>
         </div>
         <span
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${style.chip}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-medium ${style.chip}`}
         >
           <Icon className="h-3.5 w-3.5" strokeWidth={2} />
           {style.label}
         </span>
       </div>
 
-      <p className="mt-2 flex flex-wrap items-center gap-x-1 text-[13px] text-ink-500">
+      <p className="mt-2 flex flex-wrap items-center gap-x-1 text-footnote text-ink-500">
         {state === 'over' ? 'Exceeded by ' : 'Remaining '}
         <span className="tnum text-ink-700">
           <AnimatedCurrency value={difference} currency={currency} />
@@ -208,7 +208,7 @@ export function BudgetComparisonCard() {
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-ink-400">
+        <div className="mt-2 flex items-center justify-between text-micro text-ink-400">
           <span className="tnum">
             <AnimatedCount value={Math.round(ratio * 100)} suffix="% of budget used" />
           </span>
@@ -218,14 +218,14 @@ export function BudgetComparisonCard() {
 
       <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4">
         <div>
-          <dt className="text-[11px] uppercase tracking-wide text-ink-400">This month so far</dt>
-          <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+          <dt className="text-micro uppercase tracking-wide text-ink-400">This month so far</dt>
+          <dd className="tnum mt-1 text-body font-medium text-ink-900">
             <AnimatedCurrency value={data.current_total_minor} currency={currency} />
           </dd>
         </div>
         <div>
-          <dt className="text-[11px] uppercase tracking-wide text-ink-400">Budget pace</dt>
-          <dd className="tnum mt-1 text-sm font-medium text-ink-900">
+          <dt className="text-micro uppercase tracking-wide text-ink-400">Budget pace</dt>
+          <dd className="tnum mt-1 text-body font-medium text-ink-900">
             <AnimatedCount value={Math.round((data.current_total_minor / budget) * 100)} suffix="%" />
           </dd>
         </div>

@@ -24,10 +24,10 @@ export function CategoryBreakdownChart() {
       aria-labelledby="category-breakdown-heading"
       className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
     >
-      <h2 id="category-breakdown-heading" className="text-sm font-medium text-ink-900">
+      <h2 id="category-breakdown-heading" className="text-body font-medium text-ink-900">
         Spend by usage category
       </h2>
-      <p className="mt-1 text-xs text-ink-500">Aggregated across all vendors this month</p>
+      <p className="mt-1 text-caption text-ink-500">Aggregated across all vendors this month</p>
 
       <div className="mt-4">
         {error && <ErrorNote message={error.message} />}
@@ -61,8 +61,8 @@ export function CategoryBreakdownChart() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[11px] uppercase tracking-wide text-ink-400">Total</span>
-                <span className="tnum text-sm font-semibold text-ink-900">
+                <span className="text-micro uppercase tracking-wide text-ink-400">Total</span>
+                <span className="tnum text-body font-semibold text-ink-900">
                   <AnimatedCurrency value={total} currency={currency} compact />
                 </span>
               </div>
@@ -76,11 +76,11 @@ export function CategoryBreakdownChart() {
                     style={{ backgroundColor: categoryColors[item.category] }}
                     aria-hidden="true"
                   />
-                  <span className="text-[13px] text-ink-700">{categoryLabel(item.category)}</span>
-                  <span className="tnum ml-auto text-[13px] font-medium text-ink-900">
+                  <span className="text-footnote text-ink-700">{categoryLabel(item.category)}</span>
+                  <span className="tnum ml-auto text-footnote font-medium text-ink-900">
                     <AnimatedCurrency value={item.total_minor} currency={currency} />
                   </span>
-                  <span className="tnum w-10 text-right text-xs text-ink-400">
+                  <span className="tnum w-10 text-right text-caption text-ink-400">
                     {total === 0 ? '—' : `${Math.round((item.total_minor / total) * 100)}%`}
                   </span>
                 </li>

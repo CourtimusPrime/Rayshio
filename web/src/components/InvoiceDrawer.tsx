@@ -54,10 +54,10 @@ export function InvoiceDrawer({
             <div className="flex items-start gap-3 border-b border-line px-5 py-4 md:px-6">
               {data && <ServiceLogo name={data.service} size="md" />}
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold tracking-tight text-ink-900">
+                <p className="text-subhead font-semibold text-ink-900">
                   {data?.service ?? 'Invoice'}
                 </p>
-                <p className="truncate font-mono text-[11px] text-ink-400">
+                <p className="truncate font-mono text-micro text-ink-400">
                   {data?.invoice_number ?? `#${invoiceId}`}
                 </p>
               </div>
@@ -79,10 +79,10 @@ export function InvoiceDrawer({
                 <>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="tnum text-[28px] font-semibold leading-none tracking-tight text-ink-900">
+                      <p className="tnum text-title1 font-semibold text-ink-900">
                         {formatCurrency(data.value, data.currency)}
                       </p>
-                      <p className="mt-2 text-[13px] text-ink-500">
+                      <p className="mt-2 text-footnote text-ink-500">
                         {data.invoice_date ? formatDate(data.invoice_date) : 'No invoice date'}
                         {data.period_start && data.period_end
                           ? ` · ${data.period_start} → ${data.period_end}`
@@ -95,7 +95,7 @@ export function InvoiceDrawer({
                   {data.failure_reason && <ErrorNote message={data.failure_reason} />}
 
                   <div>
-                    <h3 className="text-sm font-medium text-ink-900">Line items</h3>
+                    <h3 className="text-body font-medium text-ink-900">Line items</h3>
                     <ul className="mt-3 divide-y divide-line rounded-xl border border-line">
                       {data.line_items.map((item) => (
                         <li key={item.id} className="flex items-start gap-3 px-3.5 py-3">
@@ -105,36 +105,36 @@ export function InvoiceDrawer({
                             aria-hidden="true"
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] text-ink-900">
+                            <span className="block text-footnote text-ink-900">
                               {item.description}
                             </span>
-                            <span className="block text-xs text-ink-400">
+                            <span className="block text-caption text-ink-400">
                               {categoryLabel(item.category)}
                               {item.quantity ? ` · ${item.quantity} ${item.unit ?? ''}` : ''}
                             </span>
                           </span>
-                          <span className="tnum text-[13px] font-medium text-ink-700">
+                          <span className="tnum text-footnote font-medium text-ink-700">
                             {formatCurrency(item.amount, data.currency)}
                           </span>
                         </li>
                       ))}
                       {data.line_items.length === 0 && (
-                        <li className="px-3.5 py-3 text-[13px] text-ink-500">
+                        <li className="px-3.5 py-3 text-footnote text-ink-500">
                           No line items extracted.
                         </li>
                       )}
                     </ul>
                   </div>
 
-                  <dl className="grid grid-cols-2 gap-4 border-t border-line pt-4 text-[13px]">
+                  <dl className="grid grid-cols-2 gap-4 border-t border-line pt-4 text-footnote">
                     <div>
-                      <dt className="text-[11px] uppercase tracking-wide text-ink-400">
+                      <dt className="text-micro uppercase tracking-wide text-ink-400">
                         Email subject
                       </dt>
                       <dd className="mt-1 text-ink-700">{data.email_subject ?? '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-[11px] uppercase tracking-wide text-ink-400">
+                      <dt className="text-micro uppercase tracking-wide text-ink-400">
                         Pipeline status
                       </dt>
                       <dd className="mt-1 font-mono text-ink-700">{data.raw_status}</dd>
@@ -146,13 +146,13 @@ export function InvoiceDrawer({
                       href={`/api/invoices/${data.invoice_id}/pdf`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-700 transition-colors hover:bg-canvas"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
                     >
                       <DownloadIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
                       Open PDF
                     </a>
                   ) : (
-                    <p className="text-xs text-ink-400">
+                    <p className="text-caption text-ink-400">
                       No PDF — this invoice was extracted from the email body.
                     </p>
                   )}

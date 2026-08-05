@@ -21,7 +21,7 @@ export function ConversionNote({ meta }: { meta: ConversionMeta | undefined }) {
         : ' (ECB reference rates)';
 
   return (
-    <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-400">
+    <p className="mt-2 flex items-start gap-1.5 text-micro leading-relaxed text-ink-400">
       <InfoIcon className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.75} />
       <span>
         Includes {others.join(', ')} converted to {meta.display_currency}
