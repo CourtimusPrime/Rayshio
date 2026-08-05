@@ -55,11 +55,40 @@ export default {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        card: 'var(--shadow-card)',
-        pop: 'var(--shadow-pop)',
+        e1: 'var(--shadow-e1)',
+        e2: 'var(--shadow-e2)',
+        e3: 'var(--shadow-e3)',
+        e4: 'var(--shadow-e4)',
+        edge: 'var(--shadow-edge)',
+        /*
+         * Aliases onto the new ramp. The design only ever had two levels, and
+         * every one of its 25 call sites means "a card" or "the drawer" — so
+         * they map cleanly and deepen without a find-and-replace.
+         */
+        card: 'var(--shadow-e1)',
+        pop: 'var(--shadow-e4)',
       },
       borderRadius: {
-        xl: '0.875rem',
+        sm: 'var(--radius-sm)',
+        DEFAULT: 'var(--radius-md)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        '2xl': 'var(--radius-2xl)',
+        '3xl': 'var(--radius-3xl)',
+      },
+      zIndex: {
+        raised: 'var(--z-raised)',
+        sidebar: 'var(--z-sidebar)',
+        chrome: 'var(--z-chrome)',
+        scrim: 'var(--z-scrim)',
+        sheet: 'var(--z-sheet)',
+        popover: 'var(--z-popover)',
+        toast: 'var(--z-toast)',
+      },
+      transitionTimingFunction: {
+        apple: 'var(--ease-out-apple)',
+        'apple-in-out': 'var(--ease-in-out-apple)',
       },
     },
   },

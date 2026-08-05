@@ -37,8 +37,70 @@
   --danger-soft: 254 242 242; /* #fef2f2 */
   --danger-text: 190 18 60; /* #be123c */
   --danger-solid: 244 63 94; /* #f43f5e */
-  --shadow-card: 0 1px 2px rgba(24, 24, 28, 0.04);
-  --shadow-pop: 0 6px 24px rgba(24, 24, 28, 0.08);
+  /*
+   * Elevation. One geometry for both themes; light and dark differ only in the
+   * tint and a boost multiplier, so a change to the ramp is a change in one
+   * place rather than eight. Bigger surfaces read as thicker (e1 cards, e2
+   * hover, e3 sticky chrome and popovers, e4 the full-height drawer).
+   */
+  --shadow-rgb: 24 24 28;
+  --shadow-boost: 1;
+
+  --shadow-e1:
+    0 1px 2px -1px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))),
+    0 2px 6px -2px rgb(var(--shadow-rgb) / calc(0.05 * var(--shadow-boost)));
+  --shadow-e2:
+    0 2px 4px -2px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-boost))),
+    0 6px 14px -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost)));
+  --shadow-e3:
+    0 4px 10px -4px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-boost))),
+    0 14px 32px -10px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost)));
+  --shadow-e4:
+    0 8px 20px -8px rgb(var(--shadow-rgb) / calc(0.12 * var(--shadow-boost))),
+    0 32px 72px -16px rgb(var(--shadow-rgb) / calc(0.2 * var(--shadow-boost)));
+
+  /* Where content meets floating chrome: a hairline and a short falloff, not a
+     drop shadow. Only painted once something actually scrolls underneath. */
+  --shadow-edge:
+    0 1px 0 0 rgb(var(--line)),
+    0 10px 18px -14px rgb(var(--shadow-rgb) / calc(0.5 * var(--shadow-boost)));
+
+  /*
+   * Radii, named after the Tailwind keys that consume them so existing classes
+   * deepen in place. Nesting stays correct: a rounded-lg (10) frame with p-0.5
+   * (2) around a rounded-md (8) thumb is exactly right.
+   */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+
+  /*
+   * Stacking. Chrome sits above the sidebar deliberately: below md the sidebar
+   * is a strip *above* the header in document order, so the sticky bar has to
+   * paint over it as content scrolls past. On desktop they never overlap.
+   */
+  --z-raised: 10;
+  --z-sidebar: 20;
+  --z-chrome: 30;
+  --z-scrim: 40;
+  --z-sheet: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+
+  /*
+   * Easing and duration for CSS transitions only — anything a user can grab
+   * uses a spring in JS instead, because a fixed curve cannot be interrupted
+   * and redirected mid-flight.
+   */
+  --ease-out-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out-apple: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
 
   /*
    * A scrim dims, so it cannot be --ink-900: that inverts with the theme, and
@@ -77,8 +139,10 @@
   --danger-soft: 44 20 24; /* #2c1418 */
   --danger-text: 253 164 175; /* #fda4af */
   --danger-solid: 244 63 94; /* #f43f5e */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.5);
+  /* A dark UI has less contrast to spend, so the same geometry needs a much
+     heavier tint to separate at all. Two values, not eight. */
+  --shadow-rgb: 0 0 0;
+  --shadow-boost: 3.4;
 
   --scrim: 0 0 0;
   --scrim-opacity: 0.55;
@@ -118,4 +182,22 @@ body {
 *:focus-visible {
   outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
+}
+
+/*
+ * The floor for reduced motion. Colour and opacity *changes* survive — they
+ * just become instant — because the ask is a gentler equivalent, not the
+ * removal of feedback. Components that animate imperatively (count-ups, the
+ * charts, the drawer) check the preference themselves; this catches the CSS
+ * transitions and the skeleton pulse that they cannot reach.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
