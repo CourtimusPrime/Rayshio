@@ -333,6 +333,19 @@
     box-shadow: var(--shadow-e4);
     border-left: 1px solid var(--material-rim);
   }
+  /*
+   * A backdrop-filter re-samples and re-blurs everything behind it on every
+   * frame it moves, and this surface is full height. Dragging is the one time
+   * that cost is paid continuously, so the blur goes for the duration of the
+   * gesture and the surface becomes opaque instead. Nothing is legible through
+   * a sheet travelling under a finger anyway.
+   */
+  .material-sheet[data-dragging='true'] {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    will-change: transform;
+  }
 
   .material-scrim {
     background-color: rgb(var(--scrim) / var(--scrim-opacity));

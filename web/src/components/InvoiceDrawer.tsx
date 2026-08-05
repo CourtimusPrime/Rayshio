@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { DownloadIcon, XIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -8,6 +8,7 @@ import { useBackgroundInert } from '../hooks/useBackgroundInert';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useMotionPrefs } from '../motion/useMotionPrefs';
+import { useSwipeDrawer } from '../motion/useSwipeDrawer';
 import { formatCurrency, formatDate } from '../utils/format';
 import { ServiceLogo } from './ServiceLogo';
 import { StatusBadge } from './StatusBadge';
@@ -51,19 +52,22 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
   const panelRef = useRef<HTMLElement>(null);
   const prefs = useMotionPrefs();
 
-  /*
-   * False the moment a close is requested, rather than when the node finally
-   * unmounts after its exit animation. Tying modality to unmount would leave
-   * the page inert and focus nowhere for the length of the exit — long enough
-   * for a screen reader to lose its place, and for a click to land on nothing.
-   */
-  const isPresent = useIsPresent();
+  const { x, opacity, scrimOpacity, dragging, isPresent, handlers } = useSwipeDrawer({
+    panelRef,
+    onDismiss: onClose,
+    enabled: !prefs.reduced,
+  });
 
   /*
-   * Order matters. React runs effect cleanups in the order the effects were
-   * declared, and focus cannot be moved into an inert subtree — so the page
-   * has to stop being inert before the trap tries to restore focus to the
-   * element that opened the drawer. Reversed, the restore silently no-ops.
+   * Modality is released the moment a close is requested, not when the node
+   * finally unmounts after its exit animation — otherwise the page stays inert
+   * and focus sits nowhere for the length of the exit, long enough for a screen
+   * reader to lose its place.
+   *
+   * Order matters. React runs effect cleanups in declaration order, and focus
+   * cannot be moved into an inert subtree, so the page has to stop being inert
+   * before the trap restores focus to whatever opened the drawer. Reversed, the
+   * restore silently does nothing.
    */
   useBackgroundInert(isPresent);
   useScrollLock(isPresent);
@@ -81,12 +85,11 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
     <div className="fixed inset-0 z-scrim flex justify-end">
       {/* a sibling of the panel, not its parent — which removes the
           stopPropagation that used to swallow clicks bubbling from inside */}
+      {/* driven off the panel's own x, so it fades 1:1 with the finger rather
+          than running on a second, unsynchronised clock */}
       <motion.div
         className="material-scrim absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={prefs.spring('surface')}
+        style={{ opacity: prefs.reduced ? opacity : scrimOpacity }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -96,11 +99,10 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
         aria-modal="true"
         aria-labelledby="invoice-drawer-title"
         tabIndex={-1}
-        className="material-sheet relative flex h-full w-full max-w-lg flex-col overflow-y-auto [overscroll-behavior:contain]"
-        initial={prefs.pick({ x: '100%' }, { opacity: 0 })}
-        animate={prefs.pick({ x: 0 }, { opacity: 1 })}
-        exit={prefs.pick({ x: '100%' }, { opacity: 0 })}
-        transition={prefs.spring('surface')}
+        data-dragging={dragging ? 'true' : 'false'}
+        className="material-sheet relative flex h-full w-full max-w-lg flex-col overflow-y-auto [overscroll-behavior:contain] [touch-action:pan-y]"
+        style={{ x, opacity }}
+        {...handlers}
       >
         <div className="flex items-start gap-3 border-b border-line px-5 py-4 md:px-6">
           {data && <ServiceLogo name={data.service} size="md" />}
