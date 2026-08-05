@@ -58,6 +58,21 @@ export const auth = betterAuth({
   // the /mcp endpoint and MCP_API_KEY. Renaming it signs everyone out.
   advanced: { cookiePrefix: 'imcp' },
 
+  /*
+   * Send failures back to our own sign-in card. Better Auth otherwise renders
+   * its generic "Something went wrong / CODE: UNKNOWN" page at
+   * /api/auth/error, which is a dead end: it is unstyled, it does not say what
+   * actually happened, and it offers no way back into the app. A rejected
+   * allowlist is a *routine* outcome here, not an internal error, and has to
+   * read like one.
+   */
+  onAPIError: {
+    errorURL: '/signin',
+    onError: (error) => {
+      console.warn('auth error:', error instanceof Error ? error.message : String(error));
+    },
+  },
+
   ...(googleCreds ? { socialProviders: { google: googleCreds } } : {}),
 
   /*
@@ -90,6 +105,12 @@ export const auth = betterAuth({
           if (config.ALLOWED_SIGNUP_EMAILS.includes(email)) return;
           if (await pendingInvitationFor(email)) return;
 
+          // Server-side only. Without this the rejection is undiagnosable —
+          // the browser is told an address was refused but never which one,
+          // and the address deliberately never reaches the client.
+          console.warn(
+            `sign-up refused for ${email} — not in ALLOWED_SIGNUP_EMAILS and holds no invitation`,
+          );
           throw new APIError('FORBIDDEN', {
             message: 'This email is not allowed to sign up yet.',
           });

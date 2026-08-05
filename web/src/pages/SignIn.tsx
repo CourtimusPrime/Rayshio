@@ -22,11 +22,24 @@ export function SignIn() {
   const next = safeNext(params.get('next'));
   const error = params.get('error');
 
+  /*
+   * Mapped to our own copy, never reflected. `error` is just a query parameter,
+   * so anyone can put arbitrary text in it — echoing it onto a page that looks
+   * like our sign-in screen is a ready-made phishing surface ("call this number
+   * to restore access"). React escapes markup, which stops scripting, not
+   * social engineering.
+   *
+   * Better Auth underscores the message it redirects with, hence the loose
+   * matching: the allowlist rejection arrives as
+   * `This_email_is_not_allowed_to_sign_up_yet.`
+   */
   const message = (() => {
     if (!error) return undefined;
-    if (error === 'no_workspace') return SIGN_IN.noWorkspace;
-    // Better Auth reports the thrown APIError as a forbidden/denied variant
-    if (/forbidden|denied|not_allowed|signup/i.test(error)) return SIGN_IN.notAllowed;
+    const normalized = error.toLowerCase().replace(/[_+]/g, ' ');
+    if (normalized.includes('no workspace')) return SIGN_IN.noWorkspace;
+    if (/not allowed|forbidden|denied|signup disabled|sign up/.test(normalized)) {
+      return SIGN_IN.notAllowed;
+    }
     return SIGN_IN.failed;
   })();
 
