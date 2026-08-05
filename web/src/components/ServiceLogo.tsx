@@ -53,6 +53,17 @@ const SIZES = {
 interface ServiceLogoProps {
   name: string;
   size?: keyof typeof SIZES;
+  /**
+   * Whether tier 2 may run. Set false on the signed-out marketing page: that
+   * lookup goes to `/api/logo/:service`, which is behind `requireAuth`, so a
+   * vendor without a build-time mark would make a visitor fire an
+   * authenticated request and log a 401 on the landing page.
+   *
+   * A prop rather than a rule to remember, because the failure is silent and
+   * depends on exactly how a vendor is spelled — 'Railway' misses the icon set,
+   * whose key is 'railway corporation'.
+   */
+  allowFetch?: boolean;
 }
 
 /**
@@ -66,11 +77,11 @@ interface ServiceLogoProps {
  * The lobe set is an AI/LLM collection, so tier 1 covers only some vendors;
  * tier 2 is what makes the rest of a mailbox's senders show a real logo.
  */
-export function ServiceLogo({ name, size = 'sm' }: ServiceLogoProps) {
+export function ServiceLogo({ name, size = 'sm', allowFetch = true }: ServiceLogoProps) {
   const { frame, pad, glyph, text } = SIZES[size];
   const lobeIcon = lobeIconFor(name);
   // tier 1 needs no lookup, so only ask the server about the vendors it misses
-  const logo = useServiceLogo(name, lobeIcon === undefined);
+  const logo = useServiceLogo(name, allowFetch && lobeIcon === undefined);
   const brand = brandFor(name);
 
   const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ${frame}`;

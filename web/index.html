@@ -3,9 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, nofollow" />
     <meta name="color-scheme" content="light dark" />
-    <title>InvoiceMCP</title>
+
+    <!--
+      There is deliberately no `noindex` here.
+
+      It used to be, and in the initial HTML it is fatal: Googlebot drops the
+      page before running any JavaScript, so a tag removed at runtime is never
+      seen removed. The private pages — the signed-in shell, sign-in and 404 —
+      *add* it at runtime instead (src/utils/useNoindex.ts), which is the
+      direction that works, because the crawler renders before deciding.
+
+      Everything below is static for the same reason in reverse: Slack, iMessage
+      and LinkedIn read the HTML and do not execute JavaScript, so a title or
+      OG tag set from React would never appear in an unfurl.
+    -->
+    <title>Rayshio — Vendor spend, from your inbox</title>
+    <meta
+      name="description"
+      content="Rayshio reads the invoices already in your mailbox and turns them into a spend history you can query — by vendor, by category, by fiscal quarter, in any currency."
+    />
+    <link rel="canonical" href="%VITE_PUBLIC_ORIGIN%/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Rayshio" />
+    <meta property="og:title" content="Rayshio — Vendor spend, from your inbox" />
+    <meta
+      property="og:description"
+      content="Every SaaS invoice, gathered and understood. Query your vendor spend by category, currency and fiscal period."
+    />
+    <meta property="og:url" content="%VITE_PUBLIC_ORIGIN%/" />
+    <meta property="og:image" content="%VITE_PUBLIC_ORIGIN%/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- both, so the browser chrome matches whichever theme resolves below -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141416" />
+
     <script>
       /*
        * Resolves the theme before first paint. Without this a dark-preference
