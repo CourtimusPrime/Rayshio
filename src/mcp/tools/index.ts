@@ -1,6 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { config } from '../../config.js';
 import { getPdf } from '../../mongo/pdfs.js';
 import { formatMinor } from '../../queries/format.js';
 import {
@@ -43,10 +42,14 @@ function legacyTotal(total: number): string {
   return String(total);
 }
 
-/** All queries filter by the API key's org first — account isolation per spec. */
-export function registerTools(server: McpServer): void {
-  const orgId = config.DEFAULT_ORG_ID;
-
+/**
+ * All queries filter by the API key's org first — account isolation per spec.
+ *
+ * `orgId` is a parameter rather than a process constant: the server is built
+ * per request, from the org the presented key resolved to, so one deployment
+ * serves many tenants without a tool ever choosing which one it reads.
+ */
+export function registerTools(server: McpServer, orgId: number): void {
   server.registerTool(
     'list_services',
     {
@@ -87,7 +90,7 @@ export function registerTools(server: McpServer): void {
       const invoice = await getInvoice(orgId, invoice_id);
       if (!invoice) return text({ error: `invoice ${invoice_id} not found` });
 
-      const lineItems = await getLineItems(invoice_id);
+      const lineItems = await getLineItems(orgId, invoice_id);
       return text({
         ...invoice,
         value_formatted: formatMinor(invoice.value, invoice.currency),

@@ -1,8 +1,13 @@
-# InvoiceMCP
+# Rayshio (repo: invoice-mcp)
 
 MCP server giving AI agents read access to subscription/SaaS invoice history,
 ingested from Gmail and normalized into Postgres (structured data) + MongoDB
 (PDFs). See `SPEC.md` for the full design.
+
+The product is **Rayshio** on every user-facing surface. The repository, the
+`/mcp` endpoint, the `imcp_` key and cookie prefixes, and `MCP_API_KEY` keep
+their old names deliberately: they are published contracts that appear in
+client configs already installed on user machines.
 
 ## Prerequisites
 
@@ -46,8 +51,22 @@ January, changeable on the Reports page). Fiscal years are named for the year
 they **end** in — an April start makes Apr 2025 – Mar 2026 into "FY2026" — and
 every label carries its date range, since that convention is not universal.
 
-Sign in with `DASHBOARD_PASSWORD`; the session is an HMAC-signed httpOnly
-cookie. `MCP_API_KEY` is never sent to the browser.
+Sign in with Google (Better Auth). Signing in creates a user but grants no
+access: membership in an org is a deliberate act, so the first person through
+the door does not inherit a tenant. Grant it with
+
+```
+pnpm cli grant-membership --org 1 --email you@example.com --role owner
+```
+
+Sign-up is allowlisted by `ALLOWED_SIGNUP_EMAILS`; an address outside it can
+still join by holding a pending invitation (`pnpm cli invite`).
+
+MCP keys live in `client.api_key` — `pnpm cli create-api-key --org 1` mints one
+and prints it once. No key is ever sent to the browser.
+
+The old `DASHBOARD_PASSWORD` cookie still authenticates for one release so a
+deploy does not sign anyone out mid-session; it is removed in R2.
 
 Two behaviours worth knowing:
 
@@ -127,8 +146,21 @@ One repo, two services:
   endpoint, the dashboard API, and the built SPA from one port
 
 Both build with `pnpm install && pnpm build` (which also builds `web/dist`).
-Run `pnpm migrate up` as the worker's pre-deploy command. Set env vars per
-`.env.example` (Railway injects database URLs for linked Postgres/Mongo/Redis
-services). The mcp service additionally needs `DASHBOARD_PASSWORD`,
-`DASHBOARD_SESSION_SECRET`, and `PUBLIC_MCP_URL` set to its public
-`https://<host>/mcp`.
+Migrations run automatically at boot for **both** roles — the web service can
+otherwise start before the worker has applied one and serve sign-ins against a
+missing table — so no pre-deploy command is needed. A simultaneous deploy is
+safe: node-pg-migrate locks with `pg_try_advisory_lock`, which does not wait, so
+the loser is retried by `src/main.ts` rather than crashing.
+
+Set env vars per `.env.example` (Railway injects database URLs for linked
+Postgres/Mongo/Redis services). Both services need `BETTER_AUTH_SECRET`,
+`AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET`, `PUBLIC_APP_URL` and
+`ALLOWED_SIGNUP_EMAILS`; the mcp service additionally needs `PUBLIC_MCP_URL`
+set to its public `https://<host>/mcp`. Build the SPA with
+`VITE_PUBLIC_ORIGIN=https://<host>` so canonical, OG and sitemap URLs are
+absolute and correct.
+
+Sign-in uses a **separate** Google OAuth client from Gmail ingestion. The
+ingestion client carries `gmail.readonly`, a restricted scope, so sharing it
+would show a mailbox-access consent screen for a plain login. Register
+`https://<host>/api/auth/callback/google` on the sign-in client.

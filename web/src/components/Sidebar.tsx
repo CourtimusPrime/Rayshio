@@ -9,6 +9,7 @@ import {
 import { NavLink } from 'react-router-dom';
 import { useWorkspace } from '../state/workspace';
 import { ThemeToggle } from './ThemeToggle';
+import { Wordmark } from './Wordmark';
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboardIcon, end: true },
@@ -27,11 +28,8 @@ export function Sidebar() {
 
   return (
     <aside className="material-rail relative z-sidebar flex w-full shrink-0 flex-col md:h-full md:w-60">
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-footnote font-semibold text-canvas">
-          iM
-        </span>
-        <span className="text-subhead font-semibold text-ink-900">InvoiceMCP</span>
+      <div className="px-5 py-5">
+        <Wordmark />
       </div>
 
       <nav aria-label="Main" className="px-3">

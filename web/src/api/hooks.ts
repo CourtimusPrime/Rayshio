@@ -10,6 +10,7 @@ import type {
   ServicesResponse,
   Summary,
 } from '../types';
+import { authClient } from './authClient';
 import { ApiError, apiGet, apiSend } from './client';
 
 /**
@@ -23,28 +24,48 @@ function retryUnlessUnauthorized(failureCount: number, error: Error): boolean {
   return failureCount < 2;
 }
 
+/**
+ * Deliberately still `GET /api/session` rather than `authClient.useSession()`.
+ *
+ * That endpoint answers from `resolveAuthContext`, which accepts a Better Auth
+ * session *or* a legacy `imcp_session` cookie. Asking Better Auth directly
+ * would report anyone still holding the old cookie as signed out and bounce
+ * them to the sign-in page mid-session — the one thing R1 is arranged to avoid.
+ *
+ * It also answers "is there a tenant to show", not merely "is there a user":
+ * a signed-in account with no membership is authenticated but has nothing to
+ * render, and the server is the only side that knows that.
+ */
 export function useSession() {
   return useQuery({
     queryKey: ['session'],
-    queryFn: () => apiGet<{ authenticated: boolean }>('/session'),
+    queryFn: () => apiGet<{ authenticated: boolean; pending: boolean }>('/session'),
     retry: false,
   });
 }
 
-export function useLogin() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (password: string) =>
-      apiSend<{ authenticated: boolean }>('POST', '/session', { password }),
-    onSuccess: () => queryClient.invalidateQueries(),
-  });
-}
-
+/**
+ * Ends both kinds of session, because in R1 a browser may hold either. The
+ * legacy DELETE is allowed to fail — once R2 removes that route, a 404 here
+ * must not stop the Better Auth sign-out from completing.
+ */
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiSend<{ authenticated: boolean }>('DELETE', '/session'),
-    onSuccess: () => queryClient.clear(),
+    mutationFn: async () => {
+      await apiSend('DELETE', '/session').catch(() => undefined);
+      await authClient.signOut().catch(() => undefined);
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      /*
+       * A hard navigation, not a router push. Signing out from /invoices with
+       * client-side routing lands on the gate, which redirects to
+       * /signin?next=/invoices — "you signed out, now sign back in". Leaving
+       * for '/' also discards every cached query belonging to the old session.
+       */
+      window.location.assign('/');
+    },
   });
 }
 

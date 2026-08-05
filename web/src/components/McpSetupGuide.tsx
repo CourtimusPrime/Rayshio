@@ -114,7 +114,7 @@ export function McpSetupGuide() {
         className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-6"
       >
         <h2 id="mcp-endpoint-heading" className="text-body font-medium text-ink-900">
-          Connect InvoiceMCP to your AI client
+          Connect Rayshio to your AI client
         </h2>
         <p className="mt-1 max-w-xl text-caption leading-relaxed text-ink-500">
           Pick your client below and paste the config. Agents get read-only access to your parsed

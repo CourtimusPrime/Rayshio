@@ -42,6 +42,20 @@ export default {
       title2: ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.021em' }],
       title1: ['1.75rem', { lineHeight: '2rem', letterSpacing: '-0.024em' }],
       display: ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.028em' }],
+      /*
+       * The ramp above stops at 32px, which is right for a dense dashboard and
+       * wrong for a hero — a marketing headline set at `display` reads as a
+       * section title. These three continue the same two curves rather than
+       * starting new ones: tracking keeps tightening and leading keeps closing
+       * as size grows, and `lede` loosens back out below body for the
+       * paragraph under the headline.
+       *
+       * Used as `text-hero md:text-hero-lg`. Nothing new is needed for section
+       * headings — `text-title2` already exists and was unused.
+       */
+      lede: ['1.0625rem', { lineHeight: '1.75rem', letterSpacing: '-0.014em' }],
+      hero: ['2.5rem', { lineHeight: '2.75rem', letterSpacing: '-0.032em' }],
+      'hero-lg': ['3.5rem', { lineHeight: '3.75rem', letterSpacing: '-0.036em' }],
     },
     extend: {
       letterSpacing: {

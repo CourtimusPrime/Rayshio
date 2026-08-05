@@ -98,16 +98,27 @@ export async function countInvoices(
  * one rather than inventing an invoice-level classification.
  */
 export async function dominantCategories(
+  orgId: number,
   invoiceIds: number[],
 ): Promise<Map<number, string | null>> {
   const result = new Map<number, string | null>();
   if (invoiceIds.length === 0) return result;
 
+  // The join is the org filter. Line items carry no org_id of their own, so
+  // without it a caller holding another tenant's invoice id reads that
+  // tenant's spend breakdown. Every column is qualified because the join puts
+  // an `id` and a `category`-adjacent name in scope twice.
   const rows = await db
-    .selectFrom('billing.invoice_line_items')
-    .select(({ fn }) => ['invoice_id', 'category', fn.sum('amount').as('total_minor')])
-    .where('invoice_id', 'in', invoiceIds)
-    .groupBy(['invoice_id', 'category'])
+    .selectFrom('billing.invoice_line_items as li')
+    .innerJoin('billing.invoices as i', 'i.id', 'li.invoice_id')
+    .select(({ fn }) => [
+      'li.invoice_id as invoice_id',
+      'li.category as category',
+      fn.sum('li.amount').as('total_minor'),
+    ])
+    .where('li.invoice_id', 'in', invoiceIds)
+    .where('i.org_id', '=', orgId)
+    .groupBy(['li.invoice_id', 'li.category'])
     .execute();
 
   const best = new Map<number, { category: string | null; total: number }>();
@@ -140,12 +151,22 @@ export async function getInvoice(orgId: number, invoiceId: number) {
   return invoice;
 }
 
-export async function getLineItems(invoiceId: number) {
+/**
+ * An invoice's line items, scoped to the org that owns the invoice.
+ *
+ * The join is the whole point: line items have no `org_id`, so an id alone is
+ * enough to read another tenant's itemization. `selectAll('li')`, not
+ * `selectAll()` — the unqualified form would spread the joined invoice's
+ * columns into the response body as well.
+ */
+export async function getLineItems(orgId: number, invoiceId: number) {
   return db
-    .selectFrom('billing.invoice_line_items')
-    .selectAll()
-    .where('invoice_id', '=', invoiceId)
-    .orderBy('id')
+    .selectFrom('billing.invoice_line_items as li')
+    .innerJoin('billing.invoices as i', 'i.id', 'li.invoice_id')
+    .selectAll('li')
+    .where('li.invoice_id', '=', invoiceId)
+    .where('i.org_id', '=', orgId)
+    .orderBy('li.id')
     .execute();
 }
 
