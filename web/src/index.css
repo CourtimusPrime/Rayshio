@@ -215,6 +215,81 @@
 
 @layer components {
   /*
+   * Press feedback, on pointer-down.
+   *
+   * Plain CSS :active rather than framer's whileTap. The browser fires :active
+   * the instant the pointer goes down, with no JavaScript on the input path —
+   * which is the entire point. whileTap would mean turning some forty controls
+   * into motion components and paying a React event round trip before the first
+   * pixel moves, which is the latency this is meant to remove.
+   */
+  .press {
+    transition:
+      transform 110ms var(--ease-out-apple),
+      background-color 110ms linear;
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  /* Wide targets: 4% is a wobble at 200px wide, 1.5% is a press. */
+  .press-lg {
+    transition:
+      transform 110ms var(--ease-out-apple),
+      background-color 110ms linear;
+  }
+  .press-lg:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+  /*
+   * Rows — table rows, accordion headers, nav links. Tint only, no scale: a
+   * transform on a <tr> repaints its borders badly, and a full-width row
+   * shrinking reads as a glitch rather than a press. One step past the hover
+   * fill so press stays distinguishable from hover.
+   */
+  .press-row {
+    transition: background-color 90ms linear;
+  }
+  .press-row:active {
+    background-color: rgb(var(--line));
+  }
+
+  /*
+   * Expands the touch target to 44px without inflating the control.
+   * Invisible, out of flow, costs one pseudo-element.
+   *
+   * Does not work on <select> or <input> — replaced elements do not render
+   * pseudo-elements — so those are grown by the coarse-pointer rule below.
+   */
+  .tap {
+    position: relative;
+  }
+  .tap::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  /* For controls packed tightly side by side, where a wider box would overlap. */
+  .tap-y::after {
+    width: 100%;
+  }
+
+  .skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: var(--z-toast);
+    transform: translateY(-250%);
+    transition: transform var(--dur-fast) var(--ease-out-apple);
+  }
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+
+  /*
    * Floating chrome: content scrolls underneath it. The bottom border is
    * declared transparent up front so the scroll edge appearing does not shift
    * anything by a pixel.
@@ -400,5 +475,26 @@ html[data-theme-transition] *::after {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* Press keeps its tint — that is the feedback — and loses only the scale. */
+  .press:active:not(:disabled),
+  .press-lg:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/*
+ * The 44px minimum is a touch rule, so it applies on touch. Growing every
+ * control on a pointer device would destroy the density this design is built
+ * on — Apple itself ships 44pt on iOS and 28pt on macOS for the same controls.
+ * Replaced elements land here because .tap cannot reach them.
+ */
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  [role='tab'],
+  [role='radio'] {
+    min-height: 44px;
   }
 }
