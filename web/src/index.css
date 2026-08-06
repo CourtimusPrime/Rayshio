@@ -194,6 +194,17 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    /*
+     * No scrolling past the page in either axis.
+     *
+     * `none` rather than `contain`: contain only stops the scroll *chaining*
+     * outward, while none also suppresses the rubber-band overscroll and
+     * pull-to-refresh. On a dashboard that is a fixed shell with its own inner
+     * scroller, dragging the whole page away from its edge reveals nothing but
+     * the browser's backdrop, and pull-to-refresh discards the SPA's state for
+     * a gesture that was meant to scroll a table.
+     */
+    overscroll-behavior: none;
   }
 
   body {
@@ -201,6 +212,15 @@
     @apply bg-surface font-sans text-ink-900;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    /*
+     * `clip`, not `hidden`. Both stop a stray wide child from producing a
+     * horizontal scrollbar, but `hidden` makes the body a scroll container,
+     * which silently breaks every `position: sticky` descendant — the top bar
+     * and the table headers — because sticky resolves against the nearest
+     * scrollport. `clip` crops without creating one.
+     */
+    overflow-x: clip;
   }
 
   ::selection {

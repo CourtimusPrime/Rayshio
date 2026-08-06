@@ -38,6 +38,7 @@ import {
   listMonthsWithData,
   setBudget,
   setFiscalYearStart,
+  setOrgSettings,
 } from '../queries/meta.js';
 import {
   currentMonthKey,
@@ -124,7 +125,12 @@ export function apiRouter(): Router {
     const fiscalStart = org?.fiscal_year_start_month ?? 1;
     const monthKeys = months.map((m) => m.month);
     res.json({
-      org: { id: orgId, name: org?.name ?? 'Workspace' },
+      org: {
+        id: orgId,
+        name: org?.name ?? 'Workspace',
+        default_currency: org?.default_currency ?? null,
+        department_mode: org?.department_mode ?? 'single',
+      },
       account: account
         ? {
             email_address: account.email_address,
@@ -636,6 +642,43 @@ export function apiRouter(): Router {
       available_periods: available,
       conversion: tracker.meta(),
     });
+  });
+
+  /*
+   * Org settings, partially applied. Every field is optional so the modal can
+   * send only what changed — a whole-object write would let a stale form
+   * overwrite a field someone else had just edited.
+   *
+   * `default_currency` is nullable on purpose: clearing it restores the
+   * fallback to whichever currency most invoices were billed in.
+   */
+  const orgSettingsBody = z.object({
+    default_currency: currencySchema.nullable().optional(),
+    fiscal_year_start_month: z.number().int().min(1).max(12).optional(),
+    department_mode: z.enum(['single', 'multi']).optional(),
+  });
+
+  router.patch('/settings', async (req, res) => {
+    const orgId = orgOf(req);
+    const parsed = orgSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequest(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+
+    const settings = {
+      ...parsed.data,
+      ...(parsed.data.default_currency === undefined
+        ? {}
+        : {
+            default_currency:
+              parsed.data.default_currency === null
+                ? null
+                : parsed.data.default_currency.toUpperCase(),
+          }),
+    };
+
+    await setOrgSettings(orgId, settings);
+    res.json(settings);
   });
 
   const fiscalBody = z.object({

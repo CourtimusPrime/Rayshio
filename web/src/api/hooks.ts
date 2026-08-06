@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  DepartmentMode,
   CalendarResponse,
   CategoriesResponse,
   InvoiceDetail,
@@ -202,6 +203,35 @@ export function useSetFiscalYear() {
       // every fiscal period is re-sliced by this setting
       void queryClient.invalidateQueries({ queryKey: ['meta'] });
       void queryClient.invalidateQueries({ queryKey: ['report'] });
+    },
+  });
+}
+
+/**
+ * Org settings, applied partially — only the fields that changed are sent, so
+ * a stale form cannot clobber a field someone else just edited.
+ *
+ * Invalidates everything: the fiscal year re-slices every period, and the
+ * default currency changes what figures are converted to, so no cached
+ * response survives a change here intact.
+ */
+export function useSetOrgSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      default_currency?: string | null;
+      fiscal_year_start_month?: number;
+      department_mode?: DepartmentMode;
+    }) => apiSend<typeof input>('PATCH', '/settings', input),
+    /*
+     * `void`, not `return`. react-query awaits a promise returned from
+     * onSuccess before running the per-call one, and an unfiltered
+     * invalidateQueries only settles once every active query has refetched —
+     * so returning it left the modal open for seconds after the save had
+     * already succeeded, looking like a hang.
+     */
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
     },
   });
 }

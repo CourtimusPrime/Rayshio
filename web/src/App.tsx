@@ -113,7 +113,9 @@ function Shell() {
       */}
       <div
         data-scroll-container
-        className="flex min-w-0 flex-1 flex-col bg-canvas md:h-full md:overflow-y-auto"
+        /* overscroll-contain: reaching the end of this scroller must not hand
+           the gesture to the document behind it, or the whole shell drifts */
+        className="flex min-w-0 flex-1 flex-col overscroll-contain bg-canvas md:h-full md:overflow-y-auto"
       >
         {/* 1px so it has a real box for the observer, negative-margined back so
             it costs no layout and leaves no strip above the bar */}

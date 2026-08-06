@@ -9,8 +9,16 @@ export type Category =
   | 'subscription'
   | 'other';
 
+export type DepartmentMode = 'single' | 'multi';
+
 export interface Meta {
-  org: { id: number; name: string };
+  org: {
+    id: number;
+    name: string;
+    /** Display currency the workspace opens on; null falls back to the busiest. */
+    default_currency: string | null;
+    department_mode: DepartmentMode;
+  };
   account: { email_address: string; provider: string; status: string } | null;
   currencies: string[];
   budget: { monthly_budget_minor: number; currency: string | null } | null;

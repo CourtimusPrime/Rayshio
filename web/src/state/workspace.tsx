@@ -35,9 +35,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const currencies = useMemo(() => meta?.currencies ?? [], [meta]);
   const months = useMemo(() => meta?.months ?? [], [meta]);
 
-  // fall back to the busiest currency whenever the stored one is not in the data
+  /*
+   * Three tiers, most specific first: what this user picked, then the org's
+   * configured default, then the busiest currency in the data.
+   *
+   * The org default sits in the middle rather than on top so that setting one
+   * does not override a choice a user has already made in their own browser —
+   * it is the currency a workspace *opens* on, not one it is pinned to.
+   * Each tier is only honoured if the data actually contains that currency.
+   */
+  const orgDefault = meta?.org.default_currency ?? undefined;
   const currency =
-    selectedCurrency && currencies.includes(selectedCurrency) ? selectedCurrency : currencies[0];
+    (selectedCurrency && currencies.includes(selectedCurrency) ? selectedCurrency : undefined) ??
+    (orgDefault && currencies.includes(orgDefault) ? orgDefault : undefined) ??
+    currencies[0];
 
   // today's calendar month is empty for most of any given month, so default to
   // the newest month that actually has invoices

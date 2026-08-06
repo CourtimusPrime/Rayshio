@@ -160,6 +160,14 @@ export interface ClientOrg {
    */
   budget_currency: string | null;
   /**
+   * display currency a workspace opens on; null falls back to the busiest currency in the data
+   */
+  default_currency: string | null;
+  /**
+   * single: the org is one budget unit. multi: spend is attributable to teams (SPEC.md)
+   */
+  department_mode: Generated<string>;
+  /**
    * first calendar month of the fiscal year; fiscal years are named for the year they end in
    */
   fiscal_year_start_month: Generated<number>;

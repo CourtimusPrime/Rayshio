@@ -4,10 +4,13 @@ import {
   LayoutDashboardIcon,
   PieChartIcon,
   ReceiptIcon,
+  SettingsIcon,
   TerminalIcon,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useState } from 'react';
 import { useWorkspace } from '../state/workspace';
+import { OrgSettingsModal } from './OrgSettingsModal';
 import { ThemeToggle } from './ThemeToggle';
 import { Wordmark } from './Wordmark';
 
@@ -24,6 +27,7 @@ const items = [
 
 export function Sidebar() {
   const { meta } = useWorkspace();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const endpoint = meta?.mcp_endpoint.replace(/^https?:\/\//, '');
 
   return (
@@ -75,8 +79,19 @@ export function Sidebar() {
             {endpoint ?? '—'}
           </p>
         </div>
+        {/* org-level configuration: default currency, fiscal year, department mode */}
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="press-row flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-body text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900"
+        >
+          <SettingsIcon className="h-4 w-4 text-ink-400" strokeWidth={1.75} />
+          Settings
+        </button>
         <ThemeToggle />
       </div>
+
+      <OrgSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </aside>
   );
 }

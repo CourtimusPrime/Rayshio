@@ -4,7 +4,15 @@ import { db } from '../db/client.js';
 export async function getOrg(orgId: number) {
   return db
     .selectFrom('client.org')
-    .select(['id', 'name', 'monthly_budget_minor', 'budget_currency', 'fiscal_year_start_month'])
+    .select([
+      'id',
+      'name',
+      'monthly_budget_minor',
+      'budget_currency',
+      'fiscal_year_start_month',
+      'default_currency',
+      'department_mode',
+    ])
     .where('id', '=', orgId)
     .executeTakeFirst();
 }
@@ -61,6 +69,37 @@ export async function setFiscalYearStart(orgId: number, startMonth: number): Pro
     .set({ fiscal_year_start_month: startMonth })
     .where('id', '=', orgId)
     .execute();
+}
+
+export type DepartmentMode = 'single' | 'multi';
+
+export interface OrgSettings {
+  default_currency?: string | null;
+  fiscal_year_start_month?: number;
+  department_mode?: DepartmentMode;
+}
+
+/**
+ * Applies whichever org settings were supplied, leaving the rest alone.
+ *
+ * A partial update rather than a whole-object write: the settings modal sends
+ * only what changed, and a full write would let a stale form clobber a field
+ * someone else had just edited.
+ */
+export async function setOrgSettings(orgId: number, settings: OrgSettings): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (settings.default_currency !== undefined) {
+    patch.default_currency = settings.default_currency;
+  }
+  if (settings.fiscal_year_start_month !== undefined) {
+    patch.fiscal_year_start_month = settings.fiscal_year_start_month;
+  }
+  if (settings.department_mode !== undefined) {
+    patch.department_mode = settings.department_mode;
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  await db.updateTable('client.org').set(patch).where('id', '=', orgId).execute();
 }
 
 export async function setBudget(
