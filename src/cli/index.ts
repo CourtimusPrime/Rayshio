@@ -69,6 +69,21 @@ program
   });
 
 program
+  .command('retry-stuck')
+  .description('Re-queue invoices whose extraction never completed (dry run by default)')
+  .option('--org <id>', 'org id', '1')
+  .option(
+    '--older-than <minutes>',
+    'only those stuck this long, so in-flight work is left alone',
+    '15',
+  )
+  .option('--apply', 'actually re-queue them', false)
+  .action(async (opts: { org: string; olderThan: string; apply: boolean }) => {
+    const { retryStuck } = await import('./commands/retry-stuck.js');
+    await retryStuck(Number(opts.org), Number(opts.olderThan), opts.apply);
+  });
+
+program
   .command('prune-non-invoices')
   .description('Retire zero-value "invoices" that were really announcements (dry run by default)')
   .option('--org <id>', 'org id', '1')

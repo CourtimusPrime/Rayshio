@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
+import { retryExtraction } from '../pipeline/retry.js';
 import { createUploadedInvoice } from '../pipeline/uploads.js';
 import {
   ConversionTracker,
@@ -448,6 +449,29 @@ export function apiRouter(): Router {
       res.status(202).json({ invoice_id: uploaded.invoiceId, filename: uploaded.filename });
     },
   );
+
+  /**
+   * Re-queue extraction for one invoice.
+   *
+   * Exists because a lost job is invisible from the row: an invoice sits in a
+   * non-terminal status forever and nothing in the product could move it. Also
+   * covers retrying a failed extraction after the extractor improves.
+   */
+  router.post('/invoices/:id/retry', async (req, res) => {
+    const orgId = orgOf(req);
+    const invoiceId = Number(req.params.id);
+    if (!Number.isInteger(invoiceId)) throw new BadRequest('invalid invoice id');
+
+    const result = await retryExtraction(orgId, invoiceId, Date.now());
+    if (!result.enqueued) {
+      // "not found in this workspace" covers both a missing invoice and another
+      // tenant's — the caller must not be able to tell those apart
+      const status = result.reason?.includes('not found') ? 404 : 409;
+      res.status(status).json({ error: result.reason });
+      return;
+    }
+    res.status(202).json({ invoice_id: invoiceId, status: 'queued' });
+  });
 
   router.get('/invoices/:id/pdf', async (req, res) => {
     const orgId = orgOf(req);
