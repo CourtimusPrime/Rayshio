@@ -31,7 +31,17 @@ export async function classifySender(input: {
 
 const EMAIL_SYSTEM = `You classify a single email for an invoice-ingestion system.
 is_invoice is true only if this specific email is an invoice, receipt, or billing statement
-for a payment — not a payment reminder, marketing email, or product notification.`;
+for a payment the recipient MADE — it must state an amount they were charged.
+
+A billing sender also sends plenty of mail that is not a bill. is_invoice is false for:
+- product, legal or service announcements, even when the subject mentions billing
+  (e.g. "[Product Update] ...", "[Billing Update] console permissions are changing")
+- account and configuration notices: payment method added, billing email changed,
+  workspace created, passkey added, permissions or role changes
+- notifications that an invoice EXISTS elsewhere but carry no amount
+  (e.g. "Your invoice is available" with only a link)
+- payouts, disbursements or refunds TO the recipient — money in, not money out
+- payment reminders and marketing`;
 
 export async function classifyEmail(input: {
   senderAddress: string;

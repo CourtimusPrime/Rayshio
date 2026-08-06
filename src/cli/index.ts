@@ -69,6 +69,16 @@ program
   });
 
 program
+  .command('prune-non-invoices')
+  .description('Retire zero-value "invoices" that were really announcements (dry run by default)')
+  .option('--org <id>', 'org id', '1')
+  .option('--apply', 'actually mark them, instead of only reporting', false)
+  .action(async (opts: { org: string; apply: boolean }) => {
+    const { pruneNonInvoices } = await import('./commands/prune-non-invoices.js');
+    await pruneNonInvoices(Number(opts.org), opts.apply);
+  });
+
+program
   .command('grant-membership')
   .description('Give an existing signed-in user access to an org')
   .requiredOption('--org <id>', 'org id')

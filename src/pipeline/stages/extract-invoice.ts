@@ -71,6 +71,23 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
     );
   }
 
+  /*
+   * A bill for nothing is not a bill.
+   *
+   * The heuristic in stage 1 catches most non-invoices by subject, but some
+   * arrive looking exactly like one — "Your invoice is available" with the
+   * amount behind a link, or a purchase confirmation carrying no figure. They
+   * extract cleanly to a total of zero and used to land as `parsed`, where they
+   * counted toward the invoice and vendor totals on the dashboard while
+   * contributing no spend.
+   *
+   * Zero specifically, not `<= 0`: a negative total is a credit note, which is
+   * a real document with a real effect on spend.
+   */
+  if (extraction.total_minor === 0) {
+    return markFailed(invoiceId, 'not an invoice: no amount on the document');
+  }
+
   await db.transaction().execute(async (trx) => {
     await trx
       .updateTable('billing.invoices')

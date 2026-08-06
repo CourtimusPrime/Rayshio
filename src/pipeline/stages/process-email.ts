@@ -47,9 +47,26 @@ export async function processEmail(payload: JobPayloads['process-email']): Promi
     return `sender mismatch (${msg.from.address} != ${service.sender_address})`;
   }
 
+  /*
+   * The heuristic runs for EVERY email, not only mail from unconfirmed senders.
+   *
+   * Gating on the sender was the bug: a known billing sender is not a sender
+   * that only ever sends bills. cloudplatform-noreply@google.com sends product
+   * announcements, workspace-noreply@google.com sends security digests, and
+   * Doppler sends "your workplace is ready to go" — all of which were ingested
+   * as invoices, unread, because the sender was trusted. That produced 77
+   * zero-value "invoices" out of 275, inflating both the invoice count and the
+   * vendor list.
+   *
+   * Being a known sender still buys something: it skips the LLM call below.
+   * The heuristic is free, so applying it everywhere costs nothing.
+   */
+  const heuristic = scoreEmail(msg);
+  if (!heuristic.isCandidate) {
+    return `heuristic reject (score=${heuristic.score}; ${heuristic.reasons.join(',')})`;
+  }
+
   if (classifyFirst) {
-    const heuristic = scoreEmail(msg);
-    if (!heuristic.isCandidate) return `heuristic reject (score=${heuristic.score})`;
     const verdict = await classifyEmail({
       senderAddress: msg.from.address,
       subject: msg.subject,
