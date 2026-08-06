@@ -86,13 +86,40 @@ Not in `SPEC.md`; each was observed against production data.
       Today that is the only record of the spend, so removing it would understate
       GCP — but if the real invoices are found and connected, it becomes
       double-counting. Check whether they arrive at an address not yet connected.
-- [ ] **Credits are recorded as positive spend.** A $300 GCP "Credit" adds to
-      the total instead of reducing it. Needs a decision on how credits are
-      modelled before it can be fixed correctly.
+      Confirmed while auditing: what Google *does* email is a monthly Statement
+      PDF that says "This is not a bill" with every figure $0.00, so there is
+      nothing to recover from the mailbox. This needs the Tier 2 vendor
+      connection below, not better parsing.
+- [ ] **Four vendors have no recoverable invoice in the mailbox.** Google
+      Workspace (0 parsed / 18), Edge Imaging (0/4), and two Cloudflare and
+      several Google Cloud mails are all "your invoice is available" notices
+      with the amount behind a login link. None has a stored PDF, so no
+      extractor change reaches them — same Tier 2 dependency. Google Workspace
+      is the one that matters: it is a paid subscription contributing zero.
+- [x] **Credits are recorded as positive spend.** Split into two cases once the
+      documents were read. The $300 GCP "Credit" was a *trial grant* on an
+      account-confirmation email — not a bill at all, now rejected by
+      `SIGNUP_NOTICE` and retired from the table. Credits *on* a real invoice
+      (Railway's applied balance and proration) are now extracted negative; the
+      extraction prompt carries a worked example, since PDF-to-text drops the
+      minus sign. Prepaid top-ups like "OpenRouter Credits" stay positive —
+      that money did leave the account.
+- [x] **Inbound money counted as spend.** Three Stripe payouts and one customer
+      payment (AED 101.39 + USD 10.00) were `parsed` as Volero AI cost.
+      Rejected at ingest by `INBOUND_MONEY`, and the existing rows retired.
+      Narrow on purpose: "payment received" is a vendor confirming *you* paid,
+      and for Google Cloud those receipts are the only record of that spend.
 - [ ] **22 parsed invoices have no `invoice_date`** and fall back to the email
       delivery date for every date-based view. **16 have no `invoice_number`.**
-- [ ] One invoice fails reconciliation: Railway receipt #2686-3644, line items
-      summing to −12 against a stated total of 992.
+- [x] One invoice fails reconciliation: Railway receipt #2686-3644, line items
+      summing to −12 against a stated total of 992. Root cause was not the
+      invoice — the escalation retry that exists to rescue exactly this case had
+      never once run. `zodToJsonSchema` hoists the reused `isoDate` into `$defs`
+      and emits `$ref`s, which the escalation model rejects with a 400, and
+      `extract-invoice.ts` swallows that in a bare `catch`. Conversion now
+      happens inside `completeJson` with `$refStrategy: 'none'` plus a
+      strict-mode pass. The invoice re-extracted cleanly; zero reconciliation
+      failures remain.
 
 ### Reliability
 

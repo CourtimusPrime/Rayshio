@@ -85,7 +85,9 @@ program
 
 program
   .command('prune-non-invoices')
-  .description('Retire zero-value "invoices" that were really announcements (dry run by default)')
+  .description(
+    'Retire zero-value "invoices" that were really announcements, and inbound payments counted as spend (dry run by default)',
+  )
   .option('--org <id>', 'org id', '1')
   .option('--apply', 'actually mark them, instead of only reporting', false)
   .action(async (opts: { org: string; apply: boolean }) => {

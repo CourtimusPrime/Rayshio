@@ -78,3 +78,70 @@ describe('non-invoice rejection', () => {
     expect(score('Your document', 'billing@vendor.example', { pdf: true }).isCandidate).toBe(true);
   });
 });
+
+/**
+ * Money in, not money out.
+ *
+ * These four were `parsed` in production and counted as spend the org never
+ * incurred. They come from a billing-pattern sender and carry a real amount, so
+ * nothing else in the heuristic separates them from a bill.
+ */
+describe('inbound money', () => {
+  it.each([
+    ['Your AED34.17 payout for Volero AI is on the way', 'notifications@stripe.com'],
+    ['Your AED33.12 payout for Volero AI is on the way', 'notifications@stripe.com'],
+    ['Your AED34.10 payout for Volero AI is on the way', 'notifications@stripe.com'],
+    ['Payment of $10.00 from Adam Hoult for Volero AI', 'notifications@stripe.com'],
+  ])('rejects %s', (subject, from) => {
+    const result = score(subject, from);
+    expect(result.isCandidate).toBe(false);
+    expect(result.reasons).toContain('subject:inbound-money');
+  });
+
+  /*
+   * The rejection must not widen to "payment received", which is a vendor
+   * confirming a payment *to* them. For Google Cloud those receipts are the only
+   * record of that spend, so matching them here would delete real money from the
+   * dashboard. Both subjects are real.
+   */
+  it.each([
+    ['Google Cloud Platform & APIs: Payment received', 'payments-noreply@google.com'],
+    ['Payment received for Neon, LLC invoice (#JNGJTU-00002)', 'invoice@neon.tech'],
+  ])('still accepts the vendor payment confirmation %s', (subject, from) => {
+    const result = score(subject, from);
+    expect(result.isCandidate).toBe(true);
+    expect(result.reasons).not.toContain('subject:inbound-money');
+  });
+
+  /* A hard reject, so a PDF from a billing sender cannot add it back up. */
+  it('rejects a payout even with a PDF from a billing sender', () => {
+    expect(
+      score('Your payout is on the way', 'billing@stripe.com', { pdf: true, body: 'amount paid' })
+        .isCandidate,
+    ).toBe(false);
+  });
+});
+
+/**
+ * Signup confirmations, which can carry a figure without being a bill.
+ *
+ * The Google Cloud one announced $300 of trial credit and parsed as $300 of
+ * spend — the largest single wrong number in the production data.
+ */
+describe('signup notices', () => {
+  it.each([
+    ['Account confirmation: Your Google Cloud Platform trial', 'cloudplatform-noreply@google.com'],
+    ['Welcome to Google Payments!', 'payments-noreply@google.com'],
+    ['Welcome to Stripe!', 'notifications@stripe.com'],
+  ])('rejects %s', (subject, from) => {
+    const result = score(subject, from, { body: 'amount paid' });
+    expect(result.isCandidate).toBe(false);
+    expect(result.reasons).toContain('subject:signup-notice');
+  });
+
+  it('does not reject a real invoice that merely mentions a trial period', () => {
+    expect(score('Your invoice after the trial period', 'billing@vendor.example').isCandidate).toBe(
+      true,
+    );
+  });
+});

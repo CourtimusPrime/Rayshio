@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { db, pool } from '../../db/client.js';
 
 /**
@@ -17,7 +18,47 @@ import { db, pool } from '../../db/client.js';
  */
 export const NOT_AN_INVOICE_REASON = 'not an invoice: no amount on the document';
 
+/**
+ * Retires the other kind of non-invoice: money coming *in*.
+ *
+ * A zero-value row adds nothing to spend, so it only distorts counts. These do
+ * worse — they carry a real amount and are counted as cost the org never
+ * incurred. The heuristic now rejects them at ingest; this retires the ones
+ * already in the table.
+ *
+ * The pattern is the SQL twin of `INBOUND_MONEY` in `src/pipeline/heuristics.ts`
+ * and must stay narrow for the same reason: "payment received" is a vendor
+ * confirming that you paid them, and for Google Cloud those are the only record
+ * of that spend.
+ */
+export const INBOUND_MONEY_REASON = 'not an invoice: inbound payment, not a bill';
+const INBOUND_MONEY_SQL = '\\ypayouts?\\y|payment of .* from ';
+
+/**
+ * Signup confirmations that carried a figure — the Google Cloud trial mail and
+ * its $300 of granted credit. The SQL twin of `SIGNUP_NOTICE` in the heuristic.
+ */
+const SIGNUP_NOTICE_SQL = '\\yaccount confirmation\\y|\\ywelcome to\\y';
+
 export async function pruneNonInvoices(orgId: number, apply: boolean): Promise<void> {
+  const inbound = await db
+    .selectFrom('billing.invoices as i')
+    .innerJoin('billing.email as e', 'e.id', 'i.email_id')
+    .innerJoin('server.service as s', 's.id', 'e.server_id')
+    .select(['i.id as id', 's.name as service', 'e.subject as subject', 'i.value', 'i.currency'])
+    .where('i.org_id', '=', orgId)
+    .where('i.status', '=', 'parsed')
+    /*
+     * The parentheses are load-bearing. Kysely ANDs a raw fragment onto the
+     * chain verbatim, and AND binds tighter than OR, so an unparenthesised
+     * `a OR b` here reads as `(... AND org_id AND status AND a) OR b` — the
+     * second branch escaping both the status filter and the org filter, which
+     * would reach across tenants.
+     */
+    .where(sql<boolean>`(e.subject ~* ${INBOUND_MONEY_SQL} OR e.subject ~* ${SIGNUP_NOTICE_SQL})`)
+    .orderBy('s.name')
+    .execute();
+
   const candidates = await db
     .selectFrom('billing.invoices as i')
     .innerJoin('billing.email as e', 'e.id', 'i.email_id')
@@ -29,8 +70,31 @@ export async function pruneNonInvoices(orgId: number, apply: boolean): Promise<v
     .orderBy('s.name')
     .execute();
 
+  if (inbound.length > 0) {
+    console.log(`\n${inbound.length} row(s) counted as spend that were never bills:`);
+    for (const row of inbound) {
+      const amount = (Number(row.value) / 100).toFixed(2);
+      console.log(
+        `  [${row.service}] ${amount} ${row.currency} — ${row.subject ?? '(no subject)'}`,
+      );
+    }
+    if (apply) {
+      const result = await db
+        .updateTable('billing.invoices')
+        .set({ status: 'failed', failure_reason: INBOUND_MONEY_REASON })
+        .where(
+          'id',
+          'in',
+          inbound.map((c) => c.id),
+        )
+        .executeTakeFirst();
+      console.log(`marked ${Number(result.numUpdatedRows)} as inbound, not a bill`);
+    }
+  }
+
   if (candidates.length === 0) {
-    console.log('nothing to prune — no zero-value parsed invoices');
+    if (inbound.length === 0) console.log('nothing to prune — no zero-value parsed invoices');
+    else if (!apply) console.log('\ndry run — re-run with --apply to mark these failed');
     await pool.end();
     return;
   }
