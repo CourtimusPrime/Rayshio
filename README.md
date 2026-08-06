@@ -145,6 +145,11 @@ One repo, two services:
 - **mcp** — start `pnpm start:mcp` (health check `/healthz`); serves the MCP
   endpoint, the dashboard API, and the built SPA from one port
 
+Both services are connected to this repository on `main`, so **a push to `main`
+deploys them**. `railway up` still works and deploys the working tree instead,
+which is the escape hatch for testing a change that is not committed — but it
+is no longer how a release happens.
+
 Both build with `pnpm install && pnpm build` (which also builds `web/dist`).
 Migrations run automatically at boot for **both** roles — the web service can
 otherwise start before the worker has applied one and serve sign-ins against a
