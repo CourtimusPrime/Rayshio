@@ -1,4 +1,3 @@
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { config } from '../config.js';
 import { completeJson } from './openrouter.js';
 import {
@@ -24,7 +23,7 @@ export async function classifySender(input: {
     system: SENDER_SYSTEM,
     user: JSON.stringify(input),
     schemaName: 'sender_classification',
-    jsonSchema: zodToJsonSchema(senderClassificationSchema) as Record<string, unknown>,
+    schema: senderClassificationSchema,
   });
   return senderClassificationSchema.parse(JSON.parse(content));
 }
@@ -53,7 +52,7 @@ export async function classifyEmail(input: {
     system: EMAIL_SYSTEM,
     user: JSON.stringify({ ...input, bodyPreview: input.bodyPreview.slice(0, 2000) }),
     schemaName: 'email_classification',
-    jsonSchema: zodToJsonSchema(emailClassificationSchema) as Record<string, unknown>,
+    schema: emailClassificationSchema,
   });
   return emailClassificationSchema.parse(JSON.parse(content));
 }

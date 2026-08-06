@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Category } from '../categories.js';
 import { config } from '../config.js';
 import { completeJson } from './openrouter.js';
@@ -64,7 +63,7 @@ export async function categorizeLineItems(input: {
     system: CATEGORY_SYSTEM,
     user: JSON.stringify(input),
     schemaName: 'line_item_categories',
-    jsonSchema: zodToJsonSchema(lineItemCategorySchema) as Record<string, unknown>,
+    schema: lineItemCategorySchema,
   });
   const parsed = lineItemCategorySchema.parse(JSON.parse(content));
   return new Map(parsed.categories.map((c) => [c.index, c.category as Category]));
