@@ -65,9 +65,6 @@ still join by holding a pending invitation (`pnpm cli invite`).
 MCP keys live in `client.api_key` — `pnpm cli create-api-key --org 1` mints one
 and prints it once. No key is ever sent to the browser.
 
-The old `DASHBOARD_PASSWORD` cookie still authenticates for one release so a
-deploy does not sign anyone out mid-session; it is removed in R2.
-
 Two behaviours worth knowing:
 
 - **Currency conversion is query-time only.** Invoices are stored in the currency
@@ -91,8 +88,8 @@ Local development runs two processes: `pnpm mcp` and `pnpm dev:web`, then open
 ## MCP tools
 
 `list_services`, `list_invoices`, `get_invoice`, `get_invoice_pdf`,
-`spend_summary` — all scoped to `DEFAULT_ORG_ID`; money in minor units,
-per-currency aggregation, no FX conversion.
+`spend_summary` — all scoped to the org the presented API key belongs to; money
+in minor units, per-currency aggregation, no FX conversion.
 
 Claude Desktop's connector UI expects OAuth, which this MVP doesn't
 implement — bridge with [mcp-remote](https://www.npmjs.com/package/mcp-remote)

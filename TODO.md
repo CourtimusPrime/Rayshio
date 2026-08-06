@@ -96,20 +96,20 @@ Not in `SPEC.md`; each was observed against production data.
 
 ### Reliability
 
-- [ ] **No retry path for a stranded invoice.** Invoice 3227 (an upload) sits at
-      `pdf_fetched` because its job went to a Redis with no worker attached.
-      Nothing in the product can re-enqueue it — needs an endpoint or CLI, and
-      ideally a sweep that finds invoices stuck in a non-terminal state.
-- [ ] Uploading against a server whose Redis has no worker strands the row
-      silently; the UI reports "queued for parsing" and waits forever.
+- [x] **No retry path for a stranded invoice.** `POST /api/invoices/:id/retry`
+      and `pnpm cli retry-stuck` (the sweep) both re-enqueue with a fresh job id.
+- [ ] Uploading against a server whose Redis has no worker still strands the row
+      silently; the UI reports "queued for parsing" and waits forever. The retry
+      path recovers it after the fact, but nothing surfaces the stall.
 
 ### Auth follow-through
 
 The plan in `dev/AUTH-AND-LANDING.md` sequenced these deliberately.
 
-- [ ] **R2** — delete `src/api/session.ts`, `DEFAULT_ORG_ID`, the
+- [x] **R2** — deleted `src/api/session.ts`, `DEFAULT_ORG_ID`, the
       `DASHBOARD_PASSWORD`/`DASHBOARD_SESSION_SECRET` vars, and the legacy-cookie
-      branch in `resolveAuthContext`. All four go together.
+      branch in `resolveAuthContext`. The three env vars are still set on
+      Railway and are now ignored; remove them there at leisure.
 - [ ] **R3** — delete the `MCP_API_KEY` env fallback in `src/mcp/auth.ts` once
       every client has adopted a database-backed key.
 - [ ] Invitation email delivery — there is no mailer, so `pnpm cli invite`

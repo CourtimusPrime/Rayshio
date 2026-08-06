@@ -28,13 +28,6 @@ const envSchema = z.object({
   MCP_API_KEY: z.string().min(16).optional(),
   MCP_PORT: z.coerce.number().int().default(3000),
   /**
-   * R1 only, and down to a single reader: the legacy-cookie branch in
-   * `src/auth/context.ts`. It is no longer a process-wide tenant — every
-   * handler takes its org from the session — so R2 deletes this along with
-   * that branch and `src/api/session.ts`.
-   */
-  DEFAULT_ORG_ID: z.coerce.number().int().default(1),
-  /**
    * Org that the legacy `MCP_API_KEY` env fallback maps to. Exists so a deploy
    * landing before the adopt-key step does not 401 every published client
    * config; deleted in R3 once every key lives in `client.api_key`.
@@ -42,13 +35,6 @@ const envSchema = z.object({
   MCP_LEGACY_KEY_ORG_ID: z.coerce.number().int().default(1),
 
   SYNC_CRON: z.string().default('0 6 1 * *'),
-
-  DASHBOARD_PASSWORD: z.string().min(8).optional(),
-  DASHBOARD_SESSION_SECRET: z
-    .string()
-    .refine((s) => Buffer.from(s, 'base64').length === 32, 'must be 32 bytes, base64-encoded')
-    .optional(),
-  DASHBOARD_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
 
   /*
    * Better Auth. Sign-in runs on its own Google OAuth client, separate from the

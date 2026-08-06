@@ -31,8 +31,8 @@ pnpm cli seed-dev-user --email dev@test.example --password <pw> --org 1
 ```
 
 then POST `/api/auth/sign-in/email` from Playwright's request context, which
-puts the cookie on the browser context. `DASHBOARD_PASSWORD` no longer signs
-anyone in — it is a legacy cookie check only, removed in R2.
+puts the cookie on the browser context. There is no shared-password path any
+more — R2 deleted it.
 
 **Verify against a scratch database, not production.** The local `.env` points
 `PGSQL_DATABASE_URL` at Railway. Create a throwaway database, apply

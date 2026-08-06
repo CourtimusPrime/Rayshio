@@ -1,7 +1,6 @@
 import { fromNodeHeaders } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
-import { hasSession } from '../api/session.js';
-import { config, trustedOrigins } from '../config.js';
+import { trustedOrigins } from '../config.js';
 import { auth } from './index.js';
 import { type OrgRole, resolveActiveOrg, roleSatisfies } from './memberships.js';
 
@@ -9,8 +8,9 @@ import { type OrgRole, resolveActiveOrg, roleSatisfies } from './memberships.js'
  * Who is asking, and which tenant they are asking about.
  *
  * `orgId` is deliberately non-optional. A handler holding a context has an org,
- * which is what lets every query take `orgId` as a required argument and lets
- * `DEFAULT_ORG_ID` disappear — there is no `orgId ?? default` anywhere.
+ * which is what lets every query take `orgId` as a required argument — there is
+ * no `orgId ?? default` anywhere, and no process-wide default org to fall back
+ * to.
  */
 export interface AuthContext {
   userId: string;
@@ -18,33 +18,16 @@ export interface AuthContext {
   role: OrgRole;
 }
 
-/**
- * R1 only. A valid legacy `imcp_session` cookie still authenticates, mapped to
- * the org the single-password dashboard always showed, so this release can land
- * without signing anyone out mid-deploy.
- *
- * Confined to this one branch on purpose: R2 deletes it, `src/api/session.ts`
- * and the password env vars in a single commit.
- */
-function legacyContext(req: Request): AuthContext | undefined {
-  if (config.DASHBOARD_SESSION_SECRET === undefined) return undefined;
-  if (!hasSession(req)) return undefined;
-  return { userId: 'legacy', orgId: config.DEFAULT_ORG_ID, role: 'owner' };
-}
-
 export async function resolveAuthContext(req: Request): Promise<AuthContext | undefined> {
   const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+  if (!session?.user) return undefined;
 
-  if (session?.user) {
-    const membership = await resolveActiveOrg(session.user.id);
-    // A signed-in user with no membership is authenticated but has no tenant to
-    // read. That is not an error state — it is the pre-onboarding state — and
-    // it must not fall back to some default org.
-    if (!membership) return undefined;
-    return { userId: session.user.id, orgId: membership.orgId, role: membership.role };
-  }
-
-  return legacyContext(req);
+  const membership = await resolveActiveOrg(session.user.id);
+  // A signed-in user with no membership is authenticated but has no tenant to
+  // read. That is not an error state — it is the pre-onboarding state — and
+  // it must not fall back to some default org.
+  if (!membership) return undefined;
+  return { userId: session.user.id, orgId: membership.orgId, role: membership.role };
 }
 
 /**

@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { isSignedIn, resolveAuthContext } from '../auth/context.js';
-import { login, logout } from './session.js';
 
 /**
  * The only ungated router. It exists so that "public" is a property of *where a
  * route is declared* rather than of where it happens to sit relative to a
- * `router.use(requireSession)` line — the previous arrangement made anything
+ * `router.use(requireAuth)` line — the previous arrangement made anything
  * declared above that line silently public, which is a mistake a reviewer has
  * to notice rather than one the compiler catches.
  *
@@ -42,12 +41,6 @@ export function publicRouter(): Router {
       res.json({ authenticated: false, pending: false });
     });
   });
-
-  // Legacy shared-password sign-in. Both of these, and session.ts with them,
-  // are deleted in R2 — Google sign-in replaces them. They stay for R1 so a
-  // deploy does not invalidate a session someone is mid-way through using.
-  router.post('/session', login);
-  router.delete('/session', logout);
 
   return router;
 }
