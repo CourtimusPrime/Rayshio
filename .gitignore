@@ -7,3 +7,6 @@ web/dist/
 *.tsbuildinfo
 graphify-out/
 graphify-out/
+
+# GSD planning docs (local-only)
+.planning/
