@@ -2,8 +2,11 @@ node_modules/
 dist/
 web/dist/
 .env
+.env.bak.*
 *.log
 .DS_Store
 *.tsbuildinfo
 graphify-out/
-
+.playwright-mcp/
+.impeccable/
+.planning/

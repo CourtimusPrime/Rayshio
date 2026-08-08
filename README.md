@@ -1,20 +1,18 @@
-# Rayshio (repo: invoice-mcp)
+# Rayshio
 
-MCP server giving AI agents read access to subscription/SaaS invoice history,
-ingested from Gmail and normalized into Postgres (structured data) + MongoDB
-(PDFs). See `SPEC.md` for the full design.
+Rayshio is an invoice aggregator software for businesses that gives your AI agents MCP access to your expenses.
 
-The product is **Rayshio** on every user-facing surface. The repository, the
-`/mcp` endpoint, the `imcp_` key and cookie prefixes, and `MCP_API_KEY` keep
-their old names deliberately: they are published contracts that appear in
-client configs already installed on user machines.
+## How it Works
 
-## Prerequisites
+Rayshio aggregates invoices directly from a company's billing email address:
 
-- Node 22+, pnpm
-- Docker (local Postgres/Mongo/Redis) — or Railway database URLs
-- Google OAuth client (Gmail API enabled, redirect URI `http://localhost:8787/oauth/callback`)
-- OpenRouter API key
+1. User signs in with whatever provider their work email lives on
+2. Pulls a sample of invoices from the email to find the recipient email. _Sometimes, billing emails are aliases that forward emails to the user's email address._
+3. Poll through all emails to the billed email address(es) to find all invoices
+4. Invoice PDF is stored in MongoDB
+5. Invoice data is stored in PostgreSQL
+
+> _See `SPEC.md` for the full design._
 
 ## Setup
 
@@ -28,15 +26,36 @@ client configs already installed on user machines.
 
 ## Running
 
-| Command | What |
-|---|---|
-| `pnpm worker` | ingestion worker (BullMQ; registers the monthly sync cron) |
-| `pnpm mcp` | MCP server + dashboard API on `:3000`; also serves `web/dist` when built |
-| `pnpm dev:web` | Vite dev server on `:5173`, proxying `/api` → `:3000` |
-| `pnpm cli discover` | whole-mailbox billing-sender discovery → auto-backfill |
-| `pnpm cli backfill --service <id>` | full history for one sender |
-| `pnpm cli sync` | incremental sync now (otherwise monthly via `SYNC_CRON`) |
-| `pnpm cli categorize` | backfill usage categories onto invoice line items |
+| Command                            | What                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `pnpm worker`                      | ingestion worker (BullMQ; registers the monthly sync cron)               |
+| `pnpm mcp`                         | MCP server + dashboard API on `:3000`; also serves `web/dist` when built |
+| `pnpm dev:web`                     | Vite dev server on `:5173`, proxying `/api` → `:3000`                    |
+| `pnpm cli discover`                | whole-mailbox billing-sender discovery → auto-backfill                   |
+| `pnpm cli backfill --service <id>` | full history for one sender                                              |
+| `pnpm cli sync`                    | incremental sync now (otherwise monthly via `SYNC_CRON`)                 |
+| `pnpm cli categorize`              | backfill usage categories onto invoice line items                        |
+
+### `just`
+
+A root `justfile` wraps the common loops so nothing depends on remembering
+which pnpm script maps to which process. Recipe names cannot contain a colon —
+`just` rejects it at parse time — hence `dev-web` rather than `dev:web`.
+
+| Command          | What                                                                |
+| ---------------- | ------------------------------------------------------------------- |
+| `just`           | list recipes                                                        |
+| `just dev-mcp`   | `pnpm mcp` — API + MCP on `:3000`                                    |
+| `just dev-web`   | `pnpm dev:web` — Vite on `:5173`                                     |
+| `just dev-all`   | both of the above in one terminal; Ctrl-C stops both                 |
+| `just dev`       | alias for `dev-all`                                                  |
+| `just build`     | `pnpm build` (backend `dist/` + `web/dist`)                          |
+| `just test`      | `pnpm test` — full vitest run                                        |
+| `just clean`     | `pnpm lint:fix` — Biome format + lint with autofix                   |
+| `just kill 3000` | kill whatever holds a port, when a dev server outlives its terminal  |
+
+`dev-all` runs each server in its own process group so Ctrl-C reaches the
+`tsx`/`vite` child, not just the `pnpm` wrapper it was launched through.
 
 ## Dashboard
 
@@ -68,7 +87,7 @@ and prints it once. No key is ever sent to the browser.
 Two behaviours worth knowing:
 
 - **Currency conversion is query-time only.** Invoices are stored in the currency
-  the vendor billed; the dashboard's currency selector is a *display* target, and
+  the vendor billed; the dashboard's currency selector is a _display_ target, and
   every invoice is converted to it at the ECB rate on that invoice's own date, so
   a past month's total does not move when today's rate does. Converted values are
   never written back (`SPEC.md:190-196`), and converted figures are labeled with
@@ -81,9 +100,9 @@ Two behaviours worth knowing:
   split across categories. Classification never fails an invoice — anything
   unclassified reads as `Other` until `pnpm cli categorize` retries it.
 
-Local development runs two processes: `pnpm mcp` and `pnpm dev:web`, then open
-`http://localhost:5173`. In production only `pnpm start:mcp` is needed, provided
-`pnpm build` has produced `web/dist`.
+Local development runs two processes: `pnpm mcp` and `pnpm dev:web` (or
+`just dev-all` for both), then open `http://localhost:5173`. In production only
+`pnpm start:mcp` is needed, provided `pnpm build` has produced `web/dist`.
 
 ## MCP tools
 
@@ -101,8 +120,11 @@ in `claude_desktop_config.json` instead:
     "invoice-mcp": {
       "command": "npx",
       "args": [
-        "-y", "mcp-remote", "https://<host>/mcp",
-        "--header", "Authorization: Bearer <MCP_API_KEY>"
+        "-y",
+        "mcp-remote",
+        "https://<host>/mcp",
+        "--header",
+        "Authorization: Bearer <MCP_API_KEY>"
       ]
     }
   }
@@ -111,7 +133,7 @@ in `claude_desktop_config.json` instead:
 
 ## Development
 
-- `pnpm test` / `pnpm typecheck` / `pnpm lint`
+- `pnpm test` / `pnpm typecheck` / `pnpm lint` (or `just test` / `just clean`)
 - `pnpm codegen` — regenerate `src/db/types.ts` after schema changes
 - `tsx scripts/smoke-extract.ts [pdf]` — live LLM extraction smoke test
 - `tsx scripts/make-fixture-pdf.ts` — regenerate the multi-page fixture PDF
