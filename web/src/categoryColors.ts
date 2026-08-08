@@ -1,17 +1,17 @@
 import type { Category } from './types';
 
 /**
- * One stable colour per category. Compute/storage/network share the teal family
- * because they are the infrastructure costs most often compared against each
- * other; subscriptions and tax-style lines sit further from the accent.
+ * One stable colour per category. Compute/storage/network share the accent
+ * family because they are the infrastructure costs most often compared against
+ * each other; subscriptions and tax-style lines sit further from the accent.
  */
 export const categoryColors: Record<Category, string> = {
-  compute: '#0f766e',
-  storage: '#2f8f86',
-  api_usage: '#57a89f',
-  ai_invocations: '#8bc4be',
-  network: '#b3d8d3',
-  subscription: '#cfe4e2',
+  compute: '#c2410c',
+  storage: '#d2691e',
+  api_usage: '#e08b4f',
+  ai_invocations: '#eeb384',
+  network: '#f5cfae',
+  subscription: '#fae3d0',
   other: '#d4d4d8',
 };
 

@@ -4,12 +4,12 @@ import {
   LayoutDashboardIcon,
   PieChartIcon,
   ReceiptIcon,
+  SearchIcon,
   SettingsIcon,
   TerminalIcon,
 } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { useWorkspace } from '../state/workspace';
 import { OrgSettingsModal } from './OrgSettingsModal';
 import { ThemeToggle } from './ThemeToggle';
 import { Wordmark } from './Wordmark';
@@ -26,15 +26,47 @@ const items = [
 ];
 
 export function Sidebar() {
-  const { meta } = useWorkspace();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const endpoint = meta?.mcp_endpoint.replace(/^https?:\/\//, '');
+  const [term, setTerm] = useState('');
+  const navigate = useNavigate();
 
   return (
     <aside className="material-rail relative z-sidebar flex w-full shrink-0 flex-col md:h-full md:w-60">
       <div className="px-5 py-5">
         <Wordmark />
       </div>
+
+      {/*
+        Search sits above the nav rather than in the header. It searches
+        invoices specifically — not the page you are on — so it belongs beside
+        the thing it navigates to rather than in the chrome of whatever surface
+        happens to be open.
+
+        Hidden below md, where the rail collapses to a horizontal strip of tabs
+        with no room for a field; the Invoices page carries its own search there.
+      */}
+      <form
+        className="relative hidden px-3 pb-3 md:block"
+        onSubmit={(event) => {
+          event.preventDefault();
+          navigate(term.trim() ? `/invoices?q=${encodeURIComponent(term.trim())}` : '/invoices');
+        }}
+      >
+        <label>
+          <span className="sr-only">Search invoices</span>
+          <SearchIcon
+            className="pointer-events-none absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400"
+            strokeWidth={1.75}
+          />
+          <input
+            type="search"
+            placeholder="Search invoices"
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-3 text-body text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
+          />
+        </label>
+      </form>
 
       <nav aria-label="Main" className="px-3">
         {/* a horizontal scroller below md; needs a tab stop to be keyboard-scrollable */}
@@ -68,17 +100,6 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto space-y-3 px-4 pb-4 md:pb-5">
-        {/* the endpoint card is desktop-only for space; the toggle is not */}
-        <div className="hidden rounded-xl border border-line bg-canvas p-3.5 md:block">
-          <div className="flex items-center gap-2">
-            <TerminalIcon className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
-            <span className="text-caption font-medium text-ink-900">MCP server</span>
-            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-          </div>
-          <p className="mt-2 break-all font-mono text-micro leading-relaxed text-ink-500">
-            {endpoint ?? '—'}
-          </p>
-        </div>
         {/* org-level configuration: default currency, fiscal year, department mode */}
         <button
           type="button"

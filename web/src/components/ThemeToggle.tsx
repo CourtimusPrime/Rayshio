@@ -1,5 +1,7 @@
+import { motion } from 'framer-motion';
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { useRovingTabIndex } from '../hooks/useRovingTabIndex';
+import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { useTheme } from '../state/theme';
 import type { ThemePreference } from '../state/theme';
 
@@ -17,6 +19,7 @@ const VALUES = OPTIONS.map((option) => option.value);
  */
 export function ThemeToggle() {
   const { preference, setPreference } = useTheme();
+  const prefs = useMotionPrefs();
   // a radiogroup's documented contract is arrow-key navigation with one tab
   // stop; declaring the role without it misleads anyone who knows the pattern
   const { itemProps } = useRovingTabIndex({
@@ -46,11 +49,32 @@ export function ThemeToggle() {
             /* grown from h-7 rather than padded: three 28px targets at a 30px
                pitch would have overlapping hit boxes, and .tap-y expands only
                on the axis where there is room */
-            className={`press tap-y flex h-9 flex-1 items-center justify-center rounded-md transition-colors ${
-              active ? 'bg-surface text-ink-900 shadow-card' : 'text-ink-400 hover:text-ink-700'
+            className={`press tap-y relative flex h-9 flex-1 items-center justify-center rounded-md transition-colors ${
+              active ? 'text-ink-900' : 'text-ink-400 hover:text-ink-700'
             }`}
           >
-            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+            {/*
+              One indicator that travels, rather than a background that appears
+              on whichever button is active. `layoutId` is what makes it the
+              same object moving: framer measures the old and new positions and
+              interpolates between them.
+
+              Critically damped: this is a state change, and overshoot on
+              something the user did not throw reads as a wobble. Under reduced
+              motion the indicator jumps rather than travels, which is the
+              honest degradation — the state still changes, it just stops
+              moving.
+            */}
+            {active && (
+              <motion.span
+                aria-hidden="true"
+                layoutId="theme-option"
+                layout={prefs.pick(true, false)}
+                transition={prefs.spring('quick')}
+                className="absolute inset-0 rounded-md border border-line-strong bg-surface shadow-card"
+              />
+            )}
+            <Icon className="relative h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         );
       })}

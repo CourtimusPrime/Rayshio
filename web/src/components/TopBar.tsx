@@ -1,20 +1,10 @@
-import {
-  CheckCircle2Icon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LogOutIcon,
-  SearchIcon,
-} from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { ChevronLeftIcon, ChevronRightIcon, LogOutIcon } from 'lucide-react';
 import { useLogout } from '../api/hooks';
 import { useWorkspace } from '../state/workspace';
 import { longMonthLabel } from '../utils/format';
 
 export function TopBar({ title, scrolled = false }: { title: string; scrolled?: boolean }) {
   const { meta, currency, setCurrency, currencies, month, setMonth, months } = useWorkspace();
-  const [term, setTerm] = useState('');
-  const navigate = useNavigate();
   const logout = useLogout();
 
   const accountEmail = meta?.account?.email_address;
@@ -32,70 +22,48 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
       data-scrolled={scrolled ? 'true' : 'false'}
       className="material-chrome sticky top-0 z-chrome flex flex-wrap items-center gap-4 px-5 py-4 md:px-8"
     >
-      <div className="min-w-0">
-        <h1 className="truncate text-title3 font-semibold text-ink-900">{title}</h1>
-        {/* a shade heavier than the rest of the secondary text: flat grey loses
-            legibility over a translucent surface, and weight is the fix that
-            does not put colour on the see-through layer */}
-        <p className="mt-0.5 text-caption font-medium text-ink-500">
-          {meta?.org.name ?? '—'} · workspace
-        </p>
-      </div>
+      {/*
+        The visible page title is gone — the month navigation took this slot.
+        It survives as the document's heading rather than being deleted: every
+        page still needs one h1, and it is what a screen reader announces on
+        arrival and what heading navigation jumps to.
+      */}
+      <h1 className="sr-only">{title}</h1>
 
-      {/* wraps as a group: month nav + currency + account exceed a phone width on one line */}
+      {/* The period being read, at the far left: it qualifies every figure on
+          the page, so it belongs where the eye starts rather than in the
+          right-hand cluster of controls. */}
+      {months.length > 1 && (
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => previousMonth && setMonth(previousMonth)}
+            disabled={!previousMonth}
+            aria-label="Previous month"
+            className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+          <span
+            aria-live="polite"
+            className="min-w-[7rem] text-center text-subhead font-semibold text-ink-900 sm:min-w-[8.5rem]"
+          >
+            {longMonthLabel(month)}
+          </span>
+          <button
+            type="button"
+            onClick={() => nextMonth && setMonth(nextMonth)}
+            disabled={!nextMonth}
+            aria-label="Next month"
+            className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+        </div>
+      )}
+
+      {/* wraps as a group: currency + account exceed a phone width on one line */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
-        <form
-          className="relative hidden lg:block"
-          onSubmit={(event) => {
-            event.preventDefault();
-            navigate(term.trim() ? `/invoices?q=${encodeURIComponent(term.trim())}` : '/invoices');
-          }}
-        >
-          <label>
-            <span className="sr-only">Search invoices</span>
-            <SearchIcon
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400"
-              strokeWidth={1.75}
-            />
-            <input
-              type="search"
-              placeholder="Search invoices"
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              className="h-9 w-56 rounded-lg border border-line bg-canvas pl-9 pr-3 text-body text-ink-900 placeholder:text-ink-400 focus:border-line-strong focus:bg-surface"
-            />
-          </label>
-        </form>
-
-        {months.length > 1 && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => previousMonth && setMonth(previousMonth)}
-              disabled={!previousMonth}
-              aria-label="Previous month"
-              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <ChevronLeftIcon className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-            <span
-              aria-live="polite"
-              className="min-w-[7rem] text-center text-footnote font-medium text-ink-900 sm:min-w-[8.5rem]"
-            >
-              {longMonthLabel(month)}
-            </span>
-            <button
-              type="button"
-              onClick={() => nextMonth && setMonth(nextMonth)}
-              disabled={!nextMonth}
-              aria-label="Next month"
-              className="press tap flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500 transition-colors hover:bg-canvas hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <ChevronRightIcon className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          </div>
-        )}
-
         {/*
           Display currency: every invoice is shown whatever it was billed in,
           converted to this at the rate on its own date.
@@ -117,23 +85,20 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
           </label>
         )}
 
-        <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-left">
+        <div className="flex items-center gap-2">
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-canvas text-micro font-semibold text-ink-700"
             aria-hidden="true"
-          >
-            {meta?.account?.provider === 'google' ? 'G' : '@'}
+            className={`hidden h-1.5 w-1.5 shrink-0 rounded-full sm:block ${
+              connected ? 'bg-accent' : 'bg-ink-400'
+            }`}
+          />
+          <span className="hidden min-w-0 truncate text-footnote text-ink-700 sm:block">
+            {accountEmail ?? 'No account connected'}
           </span>
-          <span className="hidden min-w-0 sm:block">
-            <span className="flex items-center gap-1 text-footnote font-medium leading-tight text-ink-900">
-              <span className="truncate">{accountEmail ?? 'No account connected'}</span>
-              {connected && (
-                <CheckCircle2Icon className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />
-              )}
-            </span>
-            <span className="text-micro leading-tight text-ink-500">
-              {connected ? 'Gmail connected' : (meta?.account?.status ?? 'Run pnpm cli auth')}
-            </span>
+          {/* the state was a visible subtitle; it stays readable to a
+              screen reader rather than becoming colour-only */}
+          <span className="sr-only">
+            {connected ? 'Gmail connected' : (meta?.account?.status ?? 'Run pnpm cli auth')}
           </span>
           <button
             type="button"

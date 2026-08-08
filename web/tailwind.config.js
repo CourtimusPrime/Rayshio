@@ -83,6 +83,15 @@ export default {
           strong: token('--line-strong'),
         },
         canvas: token('--canvas'),
+        /**
+         * The muted chart fill, as a class. The charts take their colours as
+         * props because Recharts needs values rather than classes, but the
+         * summary card's bars are plain elements — and a bare `var()` colour
+         * would silently drop any opacity modifier.
+         */
+        chart: {
+          bar: token('--chart-bar-muted'),
+        },
         /** Card and header background — `bg-white` in the original design. */
         surface: token('--surface'),
         /** Status tints, so badges stay legible in both themes. */

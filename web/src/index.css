@@ -20,15 +20,30 @@
 :root {
   --canvas: 251 251 252; /* #fbfbfc */
   --surface: 255 255 255; /* #ffffff */
+  /*
+   * Both canvases, in both themes. `--canvas` inverts with the theme, so during
+   * a theme flip there is no way to ask for the colour you are flipping *to* —
+   * these two do not invert, and the curtain transition paints itself in the
+   * incoming theme rather than the outgoing one.
+   */
+  --canvas-light: 251 251 252; /* #fbfbfc */
+  --canvas-dark: 15 15 18; /* #0f0f12 */
   --line: 236 236 240; /* #ececf0 */
   --line-strong: 224 224 230; /* #e0e0e6 */
   --ink-900: 28 28 32; /* #1c1c20 */
   --ink-700: 63 63 70; /* #3f3f46 */
-  --ink-500: 113 113 122; /* #71717a */
-  --ink-400: 155 155 163; /* #9b9ba3 */
-  --accent: 15 118 110; /* #0f766e */
-  --accent-soft: 230 242 241; /* #e6f2f1 */
-  --accent-strong: 11 92 86; /* #0b5c56 */
+  --ink-500: 113 113 122; /* #71717a — 4.83:1 on surface */
+  /*
+   * Darkened from #9b9ba3, which measured 2.76:1 on the sheet and 2.67:1 on the
+   * canvas. It carries text at every table column head, stat label, placeholder
+   * and the conversion note — all small text, so all of it failed WCAG AA. This
+   * value is 5.04:1 on surface and 4.87:1 on the canvas.
+   */
+  --ink-400: 110 110 120; /* #6e6e78 */
+  /* White on this measures 5.81:1, so a filled button still passes at 13px. */
+  --accent: 194 65 12; /* #c2410c */
+  --accent-soft: 255 241 232; /* #fff1e8 */
+  --accent-strong: 154 52 18; /* #9a3412 — 6.61:1 on accent-soft */
   --warn-soft: 255 251 235; /* #fffbeb */
   --warn-text: 180 83 9; /* #b45309 */
   --warn-solid: 245 158 11; /* #f59e0b */
@@ -138,7 +153,7 @@
   --chart-cursor: 250 250 250; /* #fafafa */
   --chart-axis: 155 155 163; /* #9b9ba3 */
   --chart-tick: 113 113 122; /* #71717a */
-  --chart-bar-muted: 207 228 226; /* #cfe4e2 */
+  --chart-bar-muted: 246 216 194; /* #f6d8c2 */
   color-scheme: light;
 }
 
@@ -150,10 +165,17 @@
   --ink-900: 242 242 244; /* #f2f2f4 */
   --ink-700: 200 200 206; /* #c8c8ce */
   --ink-500: 154 154 163; /* #9a9aa3 */
-  --ink-400: 116 116 125; /* #74747d */
-  --accent: 13 148 136; /* #0d9488 */
-  --accent-soft: 18 49 46; /* #12312e */
-  --accent-strong: 94 234 212; /* #5eead4 */
+  /* Lifted from #74747d, which measured 3.86:1 on the dark surface. 5.10:1 now. */
+  --ink-400: 141 141 150; /* #8d8d96 */
+  /*
+   * The same fill as light rather than a lifted one. A brighter orange looks
+   * better against near-black but drops white-on-accent to 3.6:1, and the teal
+   * this replaced was already failing there at 3.74:1. Holding the light value
+   * keeps a filled button at 5.81:1 in both themes.
+   */
+  --accent: 194 65 12; /* #c2410c */
+  --accent-soft: 58 31 15; /* #3a1f0f */
+  --accent-strong: 253 186 116; /* #fdba74 — 9.0:1 on accent-soft */
   --warn-soft: 42 32 16; /* #2a2010 */
   --warn-text: 251 191 36; /* #fbbf24 */
   --warn-solid: 245 158 11; /* #f59e0b */
@@ -180,7 +202,7 @@
   --chart-cursor: 30 30 36; /* #1e1e24 */
   --chart-axis: 116 116 125; /* #74747d */
   --chart-tick: 154 154 163; /* #9a9aa3 */
-  --chart-bar-muted: 31 77 72; /* #1f4d48 */
+  --chart-bar-muted: 90 52 24; /* #5a3418 */
   color-scheme: dark;
 }
 
@@ -410,6 +432,73 @@
   }
 }
 
+/*
+ * The theme wipe, where the browser supports view transitions.
+ *
+ * The old page stays put and the new one is revealed over it, top edge first.
+ * Nothing is ever hidden: both layers are real snapshots of the app, so the
+ * moving edge is a boundary between two themes rather than a blank panel
+ * passing over the content.
+ *
+ * The old snapshot is explicitly held still — the default is a cross-fade,
+ * which under a clip reveal reads as the page dimming for no reason.
+ */
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  animation: theme-wipe 420ms cubic-bezier(0.76, 0, 0.24, 1);
+  /* the incoming layer paints above the outgoing one, or the reveal is inverted */
+  z-index: 1;
+}
+
+@keyframes theme-wipe {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No wipe at all: a full-viewport reveal is exactly the large-area motion
+     this preference asks us to drop. The colour cross-fade still runs. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/*
+ * The fallback curtain, for browsers without view transitions. Both legs sweep
+ * from the top edge: the fall grows the panel down over the app, the rise
+ * retreats it back the way it came, so the motion reads as one object rather
+ * than two opposite wipes.
+ *
+ * Deliberately outside the reduced-motion block below — state/theme.tsx never
+ * mounts the curtain at all under that preference, so there is nothing here to
+ * suppress, and a 0.01ms override would only make it flash.
+ */
+@keyframes curtain-fall {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes curtain-rise {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(0);
+  }
+}
+
 /* Applied while a modal owns the screen; see hooks/useScrollLock.ts. */
 html.scroll-locked,
 html.scroll-locked body {
@@ -522,7 +611,11 @@ html[data-theme-transition] *::after {
   select,
   input:not([type="checkbox"]):not([type="radio"]),
   [role="tab"],
-  [role="radio"] {
+  [role="radio"],
+  /* Links were missing, so every sidebar nav item sat at 36px on touch while
+     every button beside it grew. `.tap` cannot reach them either — the rail's
+     links are full-width, so the shortfall was vertical. */
+  a[href] {
     min-height: 44px;
   }
 }

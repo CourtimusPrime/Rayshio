@@ -1,20 +1,34 @@
+import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSession } from './api/hooks';
 import { useMonthPrefetch } from './api/prefetch';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { LoadingBlock } from './components/states';
-import { Breakdown } from './pages/Breakdown';
-import { Calendar } from './pages/Calendar';
-import { Dashboard } from './pages/Dashboard';
-import { Invoices } from './pages/Invoices';
 import { Landing } from './pages/Landing';
-import { Privacy, Terms } from './pages/Legal';
-import { Mcp } from './pages/Mcp';
-import { NotFound } from './pages/NotFound';
 import { NoWorkspace } from './pages/NoWorkspace';
-import { Reports } from './pages/Reports';
 import { SignIn } from './pages/SignIn';
+
+/*
+ * The signed-in routes load on demand; the public ones do not.
+ *
+ * Everything used to ship in one 907 kB chunk, which meant a first-time visitor
+ * downloaded Recharts, Framer Motion and every dashboard page before the
+ * landing headline could paint — for a page that renders none of it. Landing,
+ * SignIn and NoWorkspace stay eager because they *are* the first paint.
+ *
+ * These pages use named exports, so each import is mapped to a default here
+ * rather than changing eleven files to satisfy `lazy`.
+ */
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Breakdown = lazy(() => import('./pages/Breakdown').then((m) => ({ default: m.Breakdown })));
+const Invoices = lazy(() => import('./pages/Invoices').then((m) => ({ default: m.Invoices })));
+const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
+const Calendar = lazy(() => import('./pages/Calendar').then((m) => ({ default: m.Calendar })));
+const Mcp = lazy(() => import('./pages/Mcp').then((m) => ({ default: m.Mcp })));
+const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
+const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 import { APP_TITLES, isAppPath } from './routes';
 import { WorkspaceProvider, useWorkspace } from './state/workspace';
 import { useNoindex } from './utils/useNoindex';
@@ -61,13 +75,17 @@ export function App() {
  */
 function PublicRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/signin" element={<SignIn />} />
-      <Route path="/privacy" element={<Privacy />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="*" element={<SignedOutFallback />} />
-    </Routes>
+    /* Legal and NotFound are lazy here too, so this needs its own boundary —
+       without it a signed-out visitor on /privacy throws rather than renders. */
+    <Suspense fallback={<div className="min-h-full bg-canvas" />}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/signin" element={<SignIn />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="*" element={<SignedOutFallback />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -122,20 +140,24 @@ function Shell() {
         <div ref={sentinel} aria-hidden="true" className="-mb-px h-px shrink-0" />
         <TopBar title={APP_TITLES[pathname] ?? 'Dashboard'} scrolled={!atTop} />
         <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-6 md:px-8 md:py-8">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/breakdown" element={<Breakdown />} />
-            <Route path="/invoices" element={<Invoices />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/connect" element={<Mcp />} />
-            {/* arriving at /signin while signed in: there is nothing to sign into */}
-            <Route path="/signin" element={<Navigate replace to="/" />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            {/* a real 404 — this used to render the dashboard for any typo */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          {/* The fallback matches the height of a page's first card, so paging
+              between routes does not collapse the scroller and bounce the bar. */}
+          <Suspense fallback={<LoadingBlock className="h-56" />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/breakdown" element={<Breakdown />} />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/connect" element={<Mcp />} />
+              {/* arriving at /signin while signed in: there is nothing to sign into */}
+              <Route path="/signin" element={<Navigate replace to="/" />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              {/* a real 404 — this used to render the dashboard for any typo */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { flushSync } from 'react-dom';
 import type { ReactNode } from 'react';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -18,6 +19,35 @@ const STORAGE_KEY = 'invoicemcp.theme';
 
 /** How long the one-shot colour cross-fade below runs for. */
 const THEME_FADE_MS = 260;
+
+/**
+ * The curtain: one sweep down to cover, the palette swaps behind it, one sweep
+ * up to reveal. Each leg runs for this long, so a flip costs twice it.
+ *
+ * 380 rather than the 550 the reference used. A theme toggle is a control
+ * someone may hit twice in a row to compare, and 1.1s of blackout each way
+ * turns comparing into waiting.
+ */
+const CURTAIN_MS = 380;
+
+/** The reference's easing: slow in, fast through, slow out — a real sweep. */
+const CURTAIN_EASE = 'cubic-bezier(0.76, 0, 0.24, 1)';
+
+type CurtainPhase = 'falling' | 'rising';
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+/**
+ * The incoming theme's canvas colour, read from the non-inverting tokens so the
+ * palette is never restated here.
+ */
+function canvasColour(theme: ResolvedTheme): string {
+  const style = getComputedStyle(document.documentElement);
+  const raw = style.getPropertyValue(theme === 'dark' ? '--canvas-dark' : '--canvas-light').trim();
+  return raw ? `rgb(${raw.split(/\s+/).join(', ')})` : 'transparent';
+}
 
 export interface ChartColors {
   accent: string;
@@ -122,11 +152,87 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
    */
   const [chart, setChart] = useState<ChartColors>(readChartColors);
 
+  /*
+   * `applied` is the theme actually on <html>, which lags `theme` for exactly
+   * as long as the curtain takes to cover the screen. Without the second piece
+   * of state the palette would swap while the curtain was still falling, which
+   * is the one frame the whole effect exists to hide.
+   */
+  const [applied, setApplied] = useState<ResolvedTheme>(theme);
+  const [curtain, setCurtain] = useState<{ phase: CurtainPhase; colour: string } | null>(null);
+
   const isFirstRun = useRef(true);
+  useEffect(() => {
+    if (isFirstRun.current || theme === applied) return;
+
+    // Reduced motion keeps the cross-fade and skips the sweep entirely: a
+    // full-screen wipe is exactly the kind of large-area movement the
+    // preference is asking us not to make.
+    if (prefersReducedMotion()) {
+      setApplied(theme);
+      return;
+    }
+
+    /*
+     * A view transition when the browser has one.
+     *
+     * The curtain below covers the app, swaps the palette behind itself and
+     * uncovers — which means there is a moment where the screen is a blank
+     * panel and the content is gone. A view transition instead snapshots the
+     * page before and after, so the wipe reveals the *new theme over the old
+     * one*: both are real content and nothing is ever hidden.
+     *
+     * `flushSync` is required, not stylistic. startViewTransition captures the
+     * "after" state when its callback returns, and a normal React setState is
+     * asynchronous — the callback would return before the DOM changed and the
+     * transition would capture two identical frames.
+     */
+    const startViewTransition = (
+      document as Document & {
+        startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+      }
+    ).startViewTransition;
+
+    if (typeof startViewTransition === 'function') {
+      startViewTransition.call(document, () => {
+        flushSync(() => setApplied(theme));
+      });
+      return;
+    }
+
+    setCurtain({ phase: 'falling', colour: canvasColour(theme) });
+    const cover = window.setTimeout(() => {
+      setApplied(theme);
+      setCurtain((c) => (c ? { ...c, phase: 'rising' } : c));
+    }, CURTAIN_MS);
+
+    return () => window.clearTimeout(cover);
+  }, [theme, applied]);
+
+  // Cleared on its own timer so a flip back mid-rise restarts cleanly rather
+  // than leaving a half-raised curtain pinned over the app.
+  useEffect(() => {
+    if (curtain?.phase !== 'rising') return;
+    const done = window.setTimeout(() => setCurtain(null), CURTAIN_MS + 40);
+    return () => window.clearTimeout(done);
+  }, [curtain?.phase]);
+
+  /*
+   * The whole palette hangs off this one class (see index.css).
+   *
+   * Layout effect, not effect: the class has to be on <html> before paint, and
+   * before anything reads a resolved custom property off it.
+   *
+   * Flipping theme swaps every colour in the app at once, which is an abrupt
+   * brightness change. A blanket transition would make every hover feel laggy,
+   * so instead an attribute turns one on for the length of the flip and takes
+   * it off again. The first run is skipped — that is the pre-paint script's
+   * class being confirmed, not a change the user made.
+   */
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
-    root.style.colorScheme = theme;
+    root.classList.toggle('dark', applied === 'dark');
+    root.style.colorScheme = applied;
 
     // after the class, so the resolved values are the new theme's. A state
     // update inside a layout effect re-renders before paint, so the charts
@@ -144,7 +250,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       THEME_FADE_MS + 40,
     );
     return () => window.clearTimeout(timer);
-  }, [theme]);
+  }, [applied]);
 
   const setPreference = useCallback((next: ThemePreference) => {
     localStorage.setItem(STORAGE_KEY, next);
@@ -160,7 +266,34 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [preference, theme, setPreference, cycle, chart],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+      {curtain && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: curtain.colour,
+            /*
+             * Keyframes, not a transition. The element mounts at the moment the
+             * fall begins, and a transition cannot animate away from a value
+             * the element never held — it would paint fully covered on frame
+             * one. An animation carries its own from-state.
+             */
+            transformOrigin: 'top',
+            animation: `${
+              curtain.phase === 'falling' ? 'curtain-fall' : 'curtain-rise'
+            } ${CURTAIN_MS}ms ${CURTAIN_EASE} forwards`,
+            /* above the toast layer, which is the top of the app's z ladder */
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeValue {
