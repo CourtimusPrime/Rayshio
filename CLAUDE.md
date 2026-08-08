@@ -49,6 +49,13 @@ Fall back to the Claude-in-Chrome MCP (`mcp__claude-in-chrome__*`) when you
 genuinely need the user's real browser session — an existing login, an installed
 extension, or manual visual review of something already on their screen.
 
+**Tailwind config changes need a Vite restart.** Editing `web/tailwind.config.js`
+— adding a colour, a font family, a border width — does not reach the running
+dev server. HMR reloads the CSS but the utility is never generated, so the class
+silently resolves to nothing: elements render with no background, invisible bars,
+unstyled text. It looks exactly like a CSS bug and it is not. Kill and restart
+`pnpm dev:web` after any config edit before debugging anything else.
+
 ## Migrations
 
 **Never run `@better-auth/cli migrate`** against any database. Better Auth's CLI

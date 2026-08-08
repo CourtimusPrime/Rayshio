@@ -6,7 +6,4 @@ web/dist/
 .DS_Store
 *.tsbuildinfo
 graphify-out/
-graphify-out/
 
-# GSD planning docs (local-only)
-.planning/
