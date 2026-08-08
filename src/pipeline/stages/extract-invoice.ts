@@ -8,7 +8,7 @@ import type { JobPayloads } from '../../queue/queues.js';
 import { DUPLICATE_PREFIX, NOT_AN_INVOICE_REASON } from '../failure-reasons.js';
 import { pdfToText } from '../pdf-text.js';
 import { reconcile } from '../reconcile.js';
-import { attachUploadedInvoiceVendor } from '../uploads.js';
+import { attachUploadedInvoiceVendor, isUploadedInvoice } from '../uploads.js';
 
 /**
  * An invoice this org already has from this vendor, under this invoice number.
@@ -124,7 +124,7 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
   }
 
   /*
-   * A bill for nothing is not a bill.
+   * A bill for nothing is not a bill — unless somebody went and uploaded it.
    *
    * The heuristic in stage 1 catches most non-invoices by subject, but some
    * arrive looking exactly like one — "Your invoice is available" with the
@@ -133,10 +133,24 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
    * counted toward the invoice and vendor totals on the dashboard while
    * contributing no spend.
    *
+   * That reasoning is about *mail the pipeline selected for itself*, and it does
+   * not transfer to an upload. Nobody drags a marketing email into the upload
+   * box; they drag the invoice their vendor issued, and a month with no usage
+   * produces a real invoice totalling 0.00 — Microsoft issues them, and this
+   * rule was rejecting them with "not an invoice: no amount on the document"
+   * while the document stated its total four times.
+   *
+   * So the test is not "is this zero" but "is this zero *and* did we choose it
+   * ourselves". A zero-value upload lands as `parsed` and contributes nothing to
+   * spend, which is exactly what it should contribute.
+   *
    * Zero specifically, not `<= 0`: a negative total is a credit note, which is
    * a real document with a real effect on spend.
    */
-  if (extraction.total_minor === 0) {
+  if (
+    extraction.total_minor === 0 &&
+    !(await isUploadedInvoice(Number(invoice.org_id), invoiceId))
+  ) {
     return markFailed(invoiceId, NOT_AN_INVOICE_REASON);
   }
 
