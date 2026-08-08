@@ -1,5 +1,28 @@
 # InvoiceMCP — project instructions
 
+## Changelog
+
+**Log every change in `CHANGELOG.md`.** Newest first, under a dated heading,
+grouped as Added / Changed / Fixed / Removed.
+
+Write the *reason*, not just the title, wherever the reason is not obvious from
+the change itself. What changed is recoverable from `git log` at any time; why it
+changed is not, and it is the half that stops the same mistake being made twice.
+An entry that says "fixed spinner flicker" is worth less than one that says the
+loop restarted by snapping opacity back to its start value.
+
+Also record the things that are obvious to whoever set them up and invisible to
+everyone else — infrastructure decisions, environment quirks, known-bad data
+left in place. `CHANGELOG.md` carries a standing "Development environment"
+section for exactly that; keep it current.
+
+Two entry types are easy to skip and should not be:
+
+- **Known-unresolved problems**, under Notes. A bug you found and chose not to
+  fix is information; leaving it only in a chat transcript loses it.
+- **Anything that changes how the project is run or verified** — a new port, a
+  new required service, a migration that must be applied by hand.
+
 ## Frontend validation
 
 **Try the Playwright CLI first for validating frontend changes.** Do not default
@@ -34,12 +57,27 @@ then POST `/api/auth/sign-in/email` from Playwright's request context, which
 puts the cookie on the browser context. There is no shared-password path any
 more — R2 deleted it.
 
-**Verify against a scratch database, not production.** The local `.env` points
-`PGSQL_DATABASE_URL` at Railway. Create a throwaway database, apply
-`migrations/`, and export `PGSQL_DATABASE_URL` for the run — process env beats
-the `.env` file, so no file needs editing. Two tenants holding
-identically-shaped data is what makes a cross-tenant leak look like a failure
-rather than a plausible success.
+**Verify against a scratch database, not the dev one.** Development runs
+against **self-hosted PostgreSQL, MongoDB and Redis** on a private host reached
+over Tailscale — endpoints in `.env` (`PGSQL_DATABASE_URL`,
+`MONGODB_DATABASE_URL`, `REDIS_DATABASE_URL`). It is shared and holds real
+invoice data; it is not a scratch database, and it is not Railway.
+
+`docker-compose.yml` brings up local Postgres, Mongo and Redis on 5434 / 27018 /
+6380 for throwaway work. Create a database, apply `migrations/`, and export the
+three URLs for the run — process env beats the `.env` file, so no file needs
+editing. Two tenants holding identically-shaped data is what makes a
+cross-tenant leak look like a failure rather than a plausible success.
+
+Two traps when redirecting:
+
+- The scripts under `scripts/` (`migrate.sh`, `codegen.sh`) do `set -a; . ./.env`,
+  which *overwrites* your exported URL and quietly points the command back at
+  the shared database. Invoke `node-pg-migrate` / `kysely-codegen` directly when
+  overriding.
+- Truncating Postgres without also flushing Redis makes BullMQ silently drop the
+  next jobs: identity columns restart at 1 and collide with completed job ids
+  still in the queue (`removeOnComplete` keeps 1000). Reset both together.
 
 **Beware caches when asserting a request was NOT made.** `logoCache` persists
 negative results in localStorage, so re-checking in a warmed page passes
