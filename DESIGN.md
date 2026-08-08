@@ -2,9 +2,9 @@
 name: Rayshio
 description: A dense, material-first dashboard for reading vendor spend off your own mailbox.
 colors:
-  accent: "#c2410c"
-  accent-soft: "#fff1e8"
-  accent-strong: "#9a3412"
+  accent: "#6d28d9"
+  accent-soft: "#f3eeff"
+  accent-strong: "#5b21b6"
   canvas: "#fbfbfc"
   canvas-light: "#fbfbfc"
   canvas-dark: "#0f0f12"
@@ -235,7 +235,7 @@ bounce is honest physics rather than a wobble.
 ## Colors
 
 A near-monochrome greyscale carrying almost all of the interface, with a single
-burnt-orange accent and two status tints admitted only where a state has to be
+violet accent and two status tints admitted only where a state has to be
 read at a glance.
 
 Every colour is authored as a space-separated sRGB channel triplet in a CSS
@@ -247,25 +247,37 @@ in `.impeccable/design.json`.
 
 ### Primary
 
-- **Burnt Orange** (`#c2410c`, *both* themes): the single accent. It marks the
+- **Violet** (`#6d28d9` light / `#7c3aed` dark): the single accent. It marks the
   active nav item, the connection indicator, the primary action, the "parsed"
   state, the leading series in every chart, and the "View all" link. White on it
-  measures 5.81:1, so a filled button passes at 13px.
-- **Ember** (`#fdba74`, dark theme only): foreground-only. It is the colour of
-  accent text on `accent-soft`, and it is the focus ring in dark mode because
+  measures 7.10:1 light and 5.70:1 dark, so a filled button passes at 13px in
+  both themes.
+- **Lavender** (`#c4b5fd`, dark theme only): foreground-only. It is the colour
+  of accent text on `accent-soft`, and it is the focus ring in dark mode because
   the accent sits too close to the surface there to read as a ring. Never a
-  fill. Measures 9.0:1 on `accent-soft`.
-- **Orange Wash** (`#fff1e8` light / `#3a1f0f` dark): the accent's tint. Active
+  fill. Measures 9.11:1 on `accent-soft` and 9.68:1 on the dark surface.
+- **Violet Wash** (`#f3eeff` light / `#221540` dark): the accent's tint. Active
   nav background and "parsed" badge fill.
 
-**The accent does not shift between themes, and that is deliberate.** The
-instinct is to lift it in dark for punch — but a brighter orange drops
-white-on-accent to 3.6:1, and the teal this replaced was already failing there
-at 3.74:1. Holding the light value keeps a filled button legible in both themes.
-Only `accent-strong` inverts, because it is foreground rather than fill.
+**The accent lifts one step in dark, and that is a constraint rather than a
+preference.** The burnt orange this replaced held a single value across both
+themes, because the brighter orange that reads better on near-black dropped
+white-on-accent to 3.6:1. Violet has the opposite problem: it is darker than
+orange at equal chroma, so holding `#6d28d9` in dark measures only 2.69:1
+against the canvas and a filled button loses its own edge. `#7c3aed` clears
+3:1 against the canvas (3.36:1) while still carrying white text (5.70:1). Both
+thresholds, neither with much room — this is not a free knob.
 
-**The hue is the incumbent, not a commitment.** PRODUCT.md records nothing in
-the identity as binding. What *is* durable is the accent's **role structure**:
+**Why violet at all.** Burnt orange was the incumbent and it read as brown,
+which is not a styling failure but an arithmetic one: brown *is* dark orange,
+and any orange dark enough to carry white text lands there. Hues in the
+blue–violet band stay chromatic at the same lightness. Violet was chosen over
+indigo and blue for distinctiveness, and over crimson and green because both
+collide with meaning already spent — `danger-text` is `#be123c`, and green
+reads as "under budget".
+
+**The hue is current, not a commitment.** PRODUCT.md records nothing in the
+identity as binding. What *is* durable is the accent's **role structure**:
 exactly one accent, plus a soft tint for fills and a bright that only ever
 appears as foreground. A replacement hue must supply all three roles and hold
 the same contrast relationships, or the focus ring, the badge, and the active
@@ -316,13 +328,14 @@ what makes the active state findable in a screen of grey.
 
 **The Direction-Over-Brand Rule.** When a value carries good/bad meaning, tint
 it by direction, never by brand. A rising spend chip is amber even though amber
-is not the accent; making it teal would flatter a number the user should look at.
+is not the accent; making it violet would flatter a number the user should look at.
 
 **The Two-Themes Rule.** Dark is not an inversion. Every dark value is
-hand-picked — the accent *holds* rather than lifting, accent-strong lightens
-because it is foreground, surfaces rise above the canvas instead of sinking
-below it, and the shadow tint multiplies by 3.4 because a dark UI has less
-contrast to spend. Never derive one theme from the other programmatically.
+hand-picked — the accent lifts exactly one step so it still separates from the
+canvas, accent-strong lightens much further because it is foreground, surfaces
+rise above the canvas instead of sinking below it, and the shadow tint
+multiplies by 3.4 because a dark UI has less contrast to spend. Never derive one
+theme from the other programmatically.
 
 **The Measured-Ink Rule.** Every ink step is contrast-checked against the
 surface it actually sits on, not eyeballed. The quietest step is the one that
@@ -546,9 +559,9 @@ in the product.
 - **Style:** pill, 10px horizontal / 4px vertical padding, Caption (12px/500),
   soft tint fill with matching text colour and a 6px solid dot where a state is
   being named.
-- **States:** Parsed (Orange Wash / accent-strong), Pending (amber),
+- **States:** Parsed (Violet Wash / accent-strong), Pending (amber),
   Failed (rose). Delta chips reuse the same shape but are tinted by direction:
-  amber for an increase, Orange Wash for a decrease, plain `canvas` for no
+  amber for an increase, Violet Wash for a decrease, plain `canvas` for no
   change.
 
 ### Cards / Containers
@@ -577,7 +590,7 @@ in the product.
   1.75 stroke.
 - **Default:** `ink-500` label, `ink-400` icon.
 - **Hover:** `canvas` fill, `ink-900` label.
-- **Active:** Orange Wash fill, `accent-strong` label at 500 weight, accent icon.
+- **Active:** Violet Wash fill, `accent-strong` label at 500 weight, accent icon.
 - **Mobile:** below `md` the rail becomes a horizontal scroller with its own tab
   stop, since a `overflow-x: auto` list is otherwise unreachable by keyboard.
   The rail's search is `hidden md:block` for the same reason — the collapsed
@@ -665,13 +678,13 @@ cross-fade alone.
 
 Charts take colours as props from CSS variables rather than classes, with a
 dedicated chart token set (grid, cursor, axis, tick, muted bar) tuned per theme.
-Usage categories carry one stable colour each, stepping down a single orange
-ramp from `#c2410c` to `#fae3d0` with `other` breaking to neutral grey
+Usage categories carry one stable colour each, stepping down a single violet
+ramp from `#6d28d9` to `#e6dffc` with `other` breaking to neutral grey
 (`#d4d4d8`) — compute, storage and network share the accent family because they
 are the infrastructure costs most often compared against each other.
 
 Bar charts fill the highest bar in the accent and every other bar in
-`--chart-bar-muted` (`#f6d8c2` light / `#5a3418` dark), so rank is readable
+`--chart-bar-muted` (`#e2d7f9` light / `#452e78` dark), so rank is readable
 without a legend.
 
 Every data-backed section renders `LoadingBlock` / `LoadingLines` (pulsing
@@ -695,7 +708,7 @@ by whether the error just happened), or `EmptyNote` (canvas fill, inbox icon,
   token for every stacking decision.
 - **Do** tint by direction, not by brand, when a value carries good/bad meaning.
 - **Do** hand-pick dark values. Surfaces rise above the canvas in dark; the
-  accent darkens and the accent-strong lightens.
+  accent lifts one step and the accent-strong lightens much further.
 - **Do** expand a touch target with `.tap` rather than by growing the control —
   and remember it cannot reach `<select>` or `<input>`, which the coarse-pointer
   rule grows to 44px instead.

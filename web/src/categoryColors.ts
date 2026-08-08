@@ -6,12 +6,12 @@ import type { Category } from './types';
  * each other; subscriptions and tax-style lines sit further from the accent.
  */
 export const categoryColors: Record<Category, string> = {
-  compute: '#c2410c',
-  storage: '#d2691e',
-  api_usage: '#e08b4f',
-  ai_invocations: '#eeb384',
-  network: '#f5cfae',
-  subscription: '#fae3d0',
+  compute: '#6d28d9',
+  storage: '#7c3aed',
+  api_usage: '#9668f0',
+  ai_invocations: '#b39df5',
+  network: '#cdc0f9',
+  subscription: '#e6dffc',
   other: '#d4d4d8',
 };
 

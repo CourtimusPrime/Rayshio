@@ -85,6 +85,27 @@ Two consequences worth knowing before you run anything:
 
 ### Changed
 
+- **Brand accent switched from burnt orange to violet** — `#6d28d9` light,
+  `#7c3aed` dark, with `accent-soft` `#f3eeff` / `#221540` and `accent-strong`
+  `#5b21b6` / `#c4b5fd`. The category ramp, `--chart-bar-muted` and the dark
+  focus ring follow the accent, so they moved with it.
+
+  The orange read as brown, and that was arithmetic rather than taste: brown
+  *is* dark orange, and the "white label on accent fill" rule forces the accent
+  dark enough to land there — the vivid `#f97316` alternative measures 2.80:1
+  against white and fails outright. Hues in the blue–violet band stay chromatic
+  at the same lightness. Violet over indigo and blue for distinctiveness; over
+  crimson and green because both collide with meaning already spent
+  (`danger-text` is `#be123c`, green reads as "under budget").
+
+  **The accent now lifts one step between themes, which it did not before.**
+  The old orange held one value in both, because the brighter orange that reads
+  better on near-black dropped white-on-accent to 3.6:1. Violet has the mirror
+  problem — it is darker than orange at equal chroma, so holding `#6d28d9` in
+  dark measures 2.69:1 against the canvas and a filled button loses its own
+  edge. `#7c3aed` clears 3:1 there (3.36:1) and still carries white text
+  (5.70:1). Both thresholds, neither with much room: if this value is ever
+  retuned, re-measure both, not one.
 - Upload state moved out of `UploadInvoices` into `UploadsProvider`, above the
   router. A batch started on `/invoices` used to lose its progress the moment
   you navigated away, while the server carried on working.
