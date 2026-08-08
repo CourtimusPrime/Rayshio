@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import { type Category, normalizeCategory } from '../categories.js';
 import { db } from '../db/client.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
+import { displayName } from './service-name.js';
 
 export interface SpendByServiceRow {
   currency: string;
@@ -24,7 +25,7 @@ export async function spendByService(
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .select(({ fn }) => [
       'billing.invoices.currency',
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       fn.sum('billing.invoices.value').as('total_minor'),
       fn.count('billing.invoices.id').as('invoice_count'),
     ])
@@ -34,7 +35,7 @@ export async function spendByService(
   if (range.dateTo) q = q.where(dateAtMost('billing.invoices.invoice_date', range.dateTo));
 
   const rows = await q
-    .groupBy(['billing.invoices.currency', 'server.service.name'])
+    .groupBy(['billing.invoices.currency', displayName(orgId)])
     .orderBy('total_minor', 'desc')
     .execute();
   return rows.map((r) => ({

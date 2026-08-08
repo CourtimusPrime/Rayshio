@@ -30,6 +30,24 @@ export interface Meta {
   fiscal_periods: { quarter: FiscalPeriod[]; year: FiscalPeriod[] };
   mcp_endpoint: string;
   last_ingest_at: string | null;
+  /**
+   * Vendors this org has uploaded a logo for. `ServiceLogo` checks it to know
+   * when to skip its build-time brand mark — that tier never asks the server,
+   * so without this an upload for a vendor the icon set covers would silently
+   * do nothing.
+   */
+  custom_logo_services: string[];
+}
+
+/** One vendor as this org sees it — the payload behind ServiceModal. */
+export interface ServiceDetail {
+  service_id: number;
+  /** What this org calls it: the override if set, otherwise the discovered name. */
+  display_name: string;
+  /** What the mailbox called it, so a rename can be undone knowingly. */
+  canonical_name: string;
+  is_renamed: boolean;
+  has_custom_logo: boolean;
 }
 
 /**

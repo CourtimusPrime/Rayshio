@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express, { type Request, Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/context.js';
@@ -6,6 +7,12 @@ import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
+import {
+  deleteUploadedLogo,
+  getUploadedLogo,
+  putUploadedLogo,
+  svgRejectionReason,
+} from '../mongo/uploaded-logos.js';
 import { classifyOutcome } from '../pipeline/failure-reasons.js';
 import { retryExtraction } from '../pipeline/retry.js';
 import {
@@ -58,7 +65,13 @@ import {
   trailingMonths,
 } from '../queries/months.js';
 import { projectInvoices } from '../queries/projections.js';
-import { senderAddressesFor } from '../queries/services.js';
+import {
+  customLogoServices,
+  senderAddressesFor,
+  serviceByDisplayName,
+  serviceOverrideFor,
+  setServiceOverride,
+} from '../queries/services.js';
 import { changePercent, displayStatus } from './serializers.js';
 
 /**
@@ -128,12 +141,13 @@ export function apiRouter(): Router {
 
   router.get('/meta', async (req, res) => {
     const orgId = orgOf(req);
-    const [org, currencies, accounts, lastIngest, months] = await Promise.all([
+    const [org, currencies, accounts, lastIngest, months, customLogos] = await Promise.all([
       getOrg(orgId),
       listCurrencies(orgId),
       listConnectedAccounts(orgId),
       lastIngestAt(orgId),
       listMonthsWithData(orgId),
+      customLogoServices(orgId),
     ]);
     const account = accounts.find((a) => a.status === 'active') ?? accounts[0];
     const fiscalStart = org?.fiscal_year_start_month ?? 1;
@@ -170,6 +184,12 @@ export function apiRouter(): Router {
       },
       mcp_endpoint: config.PUBLIC_MCP_URL,
       last_ingest_at: lastIngest,
+      /**
+       * Vendors with an uploaded logo. ServiceLogo consults this to know when to
+       * skip its build-time brand mark — without it, uploading a logo for a
+       * vendor the icon set covers would silently do nothing.
+       */
+      custom_logo_services: customLogos,
     });
   });
 
@@ -281,6 +301,28 @@ export function apiRouter(): Router {
     const name = req.params.service;
     if (!name) throw new BadRequest('service name is required');
 
+    /*
+     * An uploaded logo wins, and is checked first so a vendor whose favicon is
+     * perfectly fetchable can still be corrected. Served as an SVG data URL,
+     * which lands in ServiceLogo's `<img>` tier — never its inline tier, where
+     * script inside a user-supplied SVG would run.
+     */
+    const service = await serviceByDisplayName(orgId, name);
+    if (service) {
+      const override = await serviceOverrideFor(orgId, Number(service.service_id));
+      if (override?.logo_id) {
+        const svg = await getUploadedLogo(override.logo_id);
+        if (svg) {
+          res.setHeader('Cache-Control', 'private, max-age=60');
+          res.json({
+            data_url: `data:image/svg+xml;base64,${svg.toString('base64')}`,
+            source: 'upload',
+          });
+          return;
+        }
+      }
+    }
+
     const senders = await senderAddressesFor(orgId, name);
     if (senders.length === 0) {
       res.status(404).json({ error: `no service named ${name}` });
@@ -299,6 +341,152 @@ export function apiRouter(): Router {
     res.json({
       data_url: logo ? `data:${logo.contentType};base64,${logo.data.toString('base64')}` : null,
     });
+  });
+
+  /**
+   * One vendor, as this org sees it — for the edit modal.
+   *
+   * Keyed on the displayed name because that is what the components rendering a
+   * logo actually hold. `serviceByDisplayName` is org-filtered, so a name this
+   * org has no invoices from resolves to nothing rather than to a stranger's
+   * vendor.
+   */
+  router.get('/services/:service', async (req, res) => {
+    const orgId = orgOf(req);
+    const name = req.params.service;
+    if (!name) throw new BadRequest('service name is required');
+
+    const service = await serviceByDisplayName(orgId, name);
+    if (!service) {
+      res.status(404).json({ error: `no service named ${name}` });
+      return;
+    }
+    const override = await serviceOverrideFor(orgId, Number(service.service_id));
+    res.json({
+      service_id: Number(service.service_id),
+      /** What this org calls it — the override if set, otherwise the discovered name. */
+      display_name: service.display_name,
+      /** What the mailbox called it. Shown so a rename can be undone knowingly. */
+      canonical_name: service.canonical_name,
+      is_renamed: override?.display_name != null,
+      has_custom_logo: override?.logo_id != null,
+    });
+  });
+
+  /**
+   * Rename a vendor, for this org only.
+   *
+   * Writes `client.service_override`, never `server.service`. That table is
+   * global — one row per sender, shared by every tenant receiving mail from it —
+   * so an UPDATE here would rename the vendor inside other companies' dashboards.
+   *
+   * `display_name: null` reverts to the discovered name.
+   */
+  router.patch('/services/:service', async (req, res) => {
+    const orgId = orgOf(req);
+    const name = req.params.service;
+    if (!name) throw new BadRequest('service name is required');
+
+    const body = req.body as { display_name?: unknown };
+    let displayNameValue: string | null;
+    if (body.display_name === null) {
+      displayNameValue = null;
+    } else if (typeof body.display_name === 'string') {
+      const trimmed = body.display_name.trim();
+      if (trimmed === '') throw new BadRequest('a name cannot be blank');
+      if (trimmed.length > 120) throw new BadRequest('that name is too long');
+      displayNameValue = trimmed;
+    } else {
+      throw new BadRequest('display_name must be a string, or null to revert');
+    }
+
+    const service = await serviceByDisplayName(orgId, name);
+    if (!service) {
+      res.status(404).json({ error: `no service named ${name}` });
+      return;
+    }
+
+    // Renaming onto a name this org already uses would make two vendors
+    // indistinguishable in every list, and `serviceByDisplayName` would then
+    // resolve that name arbitrarily — including for the next rename.
+    if (displayNameValue !== null && displayNameValue !== service.display_name) {
+      const clash = await serviceByDisplayName(orgId, displayNameValue);
+      if (clash && Number(clash.service_id) !== Number(service.service_id)) {
+        res.status(409).json({ error: `another vendor is already called "${displayNameValue}"` });
+        return;
+      }
+    }
+
+    await setServiceOverride(orgId, Number(service.service_id), {
+      display_name: displayNameValue,
+    });
+    res.json({
+      service_id: Number(service.service_id),
+      display_name: displayNameValue ?? service.canonical_name,
+      canonical_name: service.canonical_name,
+    });
+  });
+
+  /**
+   * Replace a vendor's logo with an uploaded SVG.
+   *
+   * Raw body rather than multipart, matching `/invoices/upload` — one file, no
+   * multipart parser on either side.
+   */
+  router.put(
+    '/services/:service/logo',
+    express.raw({ type: ['image/svg+xml', 'application/octet-stream'], limit: '128kb' }),
+    async (req, res) => {
+      const orgId = orgOf(req);
+      const name = req.params.service;
+      if (!name) throw new BadRequest('service name is required');
+
+      const body = req.body as unknown;
+      if (!Buffer.isBuffer(body)) {
+        throw new BadRequest('expected an SVG body with Content-Type: image/svg+xml');
+      }
+      // Checks the bytes, not the declared type or the filename — both are the
+      // caller's to claim.
+      const rejection = svgRejectionReason(body);
+      if (rejection) throw new BadRequest(rejection);
+
+      const service = await serviceByDisplayName(orgId, name);
+      if (!service) {
+        res.status(404).json({ error: `no service named ${name}` });
+        return;
+      }
+      const serviceId = Number(service.service_id);
+
+      const previous = await serviceOverrideFor(orgId, serviceId);
+      const logoId = randomUUID();
+      await putUploadedLogo(logoId, body);
+      await setServiceOverride(orgId, serviceId, { logo_id: logoId });
+      // only once the row points at the new blob — the reverse order would
+      // leave the pointer aimed at something already deleted
+      if (previous?.logo_id) await deleteUploadedLogo(previous.logo_id);
+
+      res.json({ service_id: serviceId, has_custom_logo: true });
+    },
+  );
+
+  /** Drop an uploaded logo, falling back to the fetched favicon. */
+  router.delete('/services/:service/logo', async (req, res) => {
+    const orgId = orgOf(req);
+    const name = req.params.service;
+    if (!name) throw new BadRequest('service name is required');
+
+    const service = await serviceByDisplayName(orgId, name);
+    if (!service) {
+      res.status(404).json({ error: `no service named ${name}` });
+      return;
+    }
+    const serviceId = Number(service.service_id);
+    const existing = await serviceOverrideFor(orgId, serviceId);
+
+    await setServiceOverride(orgId, serviceId, { logo_id: null });
+    if (existing?.logo_id) await deleteUploadedLogo(existing.logo_id);
+
+    res.json({ service_id: serviceId, has_custom_logo: false });
   });
 
   /**

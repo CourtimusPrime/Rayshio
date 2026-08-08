@@ -202,6 +202,20 @@ export interface ClientOrgMember {
   user_id: string;
 }
 
+export interface ClientServiceOverride {
+  /**
+   * null = use server.service.name
+   */
+  display_name: string | null;
+  /**
+   * GridFS filename of an uploaded logo; null = use the fetched favicon
+   */
+  logo_id: string | null;
+  org_id: Int8;
+  service_id: Int8;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ClientUserActiveOrg {
   org_id: Int8;
   updated_at: Generated<Timestamp>;
@@ -228,6 +242,7 @@ export interface DB {
   "client.org": ClientOrg;
   "client.org_invitation": ClientOrgInvitation;
   "client.org_member": ClientOrgMember;
+  "client.service_override": ClientServiceOverride;
   "client.user_active_org": ClientUserActiveOrg;
   "server.service": ServerService;
 }

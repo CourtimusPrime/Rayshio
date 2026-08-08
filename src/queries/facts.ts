@@ -1,6 +1,7 @@
 import { type Expression, type SqlBool, sql } from 'kysely';
 import { db } from '../db/client.js';
 import type { DateRange } from './filters.js';
+import { displayName } from './service-name.js';
 
 /**
  * Row-level facts for the dashboard.
@@ -43,7 +44,7 @@ export async function invoiceFacts(
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .select([
       'billing.invoices.id as invoice_id',
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       'billing.invoices.currency',
       'billing.invoices.value',
       'billing.invoices.status',
@@ -85,7 +86,7 @@ export async function lineItemFacts(orgId: number, range: DateRange = {}): Promi
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .select([
       'billing.invoice_line_items.invoice_id',
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       'billing.invoice_line_items.category',
       'billing.invoice_line_items.description',
       'billing.invoice_line_items.amount',

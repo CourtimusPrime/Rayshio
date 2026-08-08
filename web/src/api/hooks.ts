@@ -9,11 +9,13 @@ import type {
   PeriodType,
   ReportResponse,
   ServiceCategoriesResponse,
+  ServiceDetail,
   ServicesResponse,
   Summary,
 } from '../types';
+import { forgetServiceLogo } from '../utils/logoCache';
 import { authClient } from './authClient';
-import { ApiError, apiGet, apiSend } from './client';
+import { ApiError, apiGet, apiPutSvg, apiSend } from './client';
 
 /**
  * A 4xx means the request itself was wrong (or the session lapsed) — retrying
@@ -152,6 +154,63 @@ export function useServiceCategories(currency: string | undefined, month: string
     staleTime: PERIOD_STALE_TIME,
     enabled: Boolean(currency),
     retry: retryUnlessUnauthorized,
+  });
+}
+
+export function useService(name: string | null) {
+  return useQuery({
+    queryKey: ['service', name],
+    queryFn: () => apiGet<ServiceDetail>(`/services/${encodeURIComponent(name ?? '')}`),
+    enabled: name !== null,
+    retry: retryUnlessUnauthorized,
+  });
+}
+
+/**
+ * Renames a vendor for this org, or reverts with `display_name: null`.
+ *
+ * Invalidates everything, and has to. The name is denormalised into every
+ * response that mentions a vendor — invoice rows, both breakdown nestings, the
+ * calendar, projections, reports — so a partial invalidation leaves the old
+ * name on whichever screen was missed, which reads as the rename having failed.
+ */
+export function useRenameService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, displayName }: { name: string; displayName: string | null }) =>
+      apiSend<ServiceDetail>('PATCH', `/services/${encodeURIComponent(name)}`, {
+        display_name: displayName,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+    },
+  });
+}
+
+/**
+ * Uploads or clears a vendor's logo.
+ *
+ * Also clears `logoCache`, which persists data URLs — and negative results —
+ * in localStorage. Without that the old logo (or a cached "this vendor has
+ * none") survives the upload and the change appears not to have taken.
+ */
+export function useSetServiceLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, svg }: { name: string; svg: File | null }) => {
+      if (svg === null) {
+        await apiSend<{ has_custom_logo: boolean }>(
+          'DELETE',
+          `/services/${encodeURIComponent(name)}/logo`,
+        );
+      } else {
+        await apiPutSvg(`/services/${encodeURIComponent(name)}/logo`, svg);
+      }
+    },
+    onSuccess: (_data, { name }) => {
+      forgetServiceLogo(name);
+      void queryClient.invalidateQueries();
+    },
   });
 }
 

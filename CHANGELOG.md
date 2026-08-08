@@ -47,6 +47,46 @@ Two consequences worth knowing before you run anything:
 
 ### Added
 
+- **ServiceModal** — rename a vendor and replace its logo, from any vendor logo
+  in the signed-in app.
+
+  **Both edits are per-org, and that is the whole design.** `server.service` has
+  no `org_id`: it is one row per `(name, sender_address)`, shared by every
+  tenant receiving mail from that sender. `UPDATE server.service SET name = ...`
+  on one org's behalf would rename that vendor inside a stranger's dashboard —
+  invisible today, because the system is single-tenant in practice, and
+  discovered only after signups, as other companies' data changing under them.
+  So corrections live in a new `client.service_override (org_id, service_id,
+  display_name, logo_id)` and reads coalesce over it.
+
+  The global name stays the ingestion key. `attachUploadedInvoiceVendor` keeps
+  matching against `server.service.name`, because two orgs renaming the same
+  vendor differently must not make the pipeline treat them as two vendors.
+
+  Reads go through one `displayName(orgId)` expression rather than a join
+  threaded through six query builders — a join would have to be positioned
+  correctly in each and mirrored in every `groupBy`, and an omission silently
+  falls back to the global name on exactly one screen. Filters use it too:
+  renaming a vendor and then filtering by that name has to return the invoices,
+  or the rename is cosmetic.
+
+  Uploaded logos are SVG only, capped at 64kb, and **rejected rather than
+  sanitised** if they carry script, event handlers, embedded URLs or
+  `foreignObject`. Stripping script out of SVG with string surgery is how filters
+  get walked through by a nested CDATA section; a vendor logo has no business
+  carrying script, so refusing is the honest version. Defence in depth only —
+  the real control is that logos render through `<img src="data:...">`, where
+  browsers do not execute script, which is why an uploaded logo must never reach
+  `ServiceLogo`'s `dangerouslySetInnerHTML` tier.
+
+  `ServiceLogo` becomes a button via an optional context. Its *absence* is
+  load-bearing: the provider is mounted inside the authenticated tree, so on the
+  signed-out marketing page the context is null and the logo stays the inert
+  decoration it was, with no flag to remember. `BreakdownDetailList` was
+  restructured — the logo used to sit inside the accordion button, and a button
+  inside a button is invalid markup that browsers resolve by dropping one, taking
+  its keyboard behaviour with it.
+
 - **Upload progress toast** (`web/src/components/UploadToast.tsx`). Reports what
   became of every uploaded file across four outcomes — added, duplicate, wasn't
   an invoice, errored — behind a hand-rolled puff spinner and dotted connectors.
@@ -126,6 +166,14 @@ Two consequences worth knowing before you run anything:
   files in one batch can point at the same invoice. The outcome poll for the
   original was overwriting the twin's already-final "duplicate" with "added",
   and a batch that correctly wrote one row reported two invoices added.
+- Uploaded logos served as **zero bytes**. A Node Buffer written into Mongo does
+  not come back as one — the driver returns a BSON `Binary` whose bytes live
+  under `.buffer`, and `Buffer.from()` on the wrapper does not throw, it yields
+  an empty buffer. The failure was silent all the way to a broken-image icon,
+  and an empty payload still base64-encodes into a well-formed
+  `data:image/svg+xml;base64,` URL, so the test asserting on that prefix passed
+  while nothing rendered. The assertion now compares decoded bytes against the
+  file that was uploaded.
 - **A genuine $0.00 invoice is no longer rejected as "not an invoice"**, when it
   was uploaded. The zero-total rule exists for mail the pipeline selected for
   itself — "your invoice is available" with the figure behind a link — and that

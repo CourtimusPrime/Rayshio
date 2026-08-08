@@ -89,11 +89,60 @@ function resolveLogo(name: string): Promise<string | null> {
 }
 
 /**
+ * Drops every cached answer for one vendor, across all three layers.
+ *
+ * Called after a logo is uploaded or cleared. Without it the change appears not
+ * to have taken: the old data URL survives in memory and localStorage for a
+ * month, and — worse for the common case — a cached `null` means a vendor that
+ * had no logo before the upload keeps rendering its monogram, which reads as
+ * the upload having been rejected.
+ *
+ * The counter increments so mounted components re-run their effect; the value
+ * itself is never read.
+ */
+export function forgetServiceLogo(name: string): void {
+  memory.delete(name);
+  inFlight.delete(name);
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + name);
+  } catch {
+    // storage unusable — clearing the memory layer is enough to refetch
+  }
+  generation += 1;
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Bumped by `forgetServiceLogo` so every mounted `useServiceLogo` refetches.
+ *
+ * A module-level subscription rather than a React context because ServiceLogo
+ * renders in dozens of places, several of them outside any provider this file
+ * could reach, and the cache it reads is module-level too.
+ */
+let generation = 0;
+const listeners = new Set<() => void>();
+
+/**
  * The vendor's logo as a data URL, `null` once it is known there is none, and
  * `undefined` while the lookup is still open — so a caller can hold the frame
  * empty rather than flashing a monogram it is about to replace.
  */
 export function useServiceLogo(name: string, enabled: boolean): string | null | undefined {
+  /*
+   * Tracks `generation` so an upload anywhere re-runs the lookup below.
+   * Re-rendering alone would not: the fetching effect keys on [name, enabled],
+   * neither of which changes when a logo is replaced, so it would keep the
+   * value it already resolved.
+   */
+  const [generationSeen, setGenerationSeen] = useState(generation);
+  useEffect(() => {
+    const listener = () => setGenerationSeen(generation);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
   const [logo, setLogo] = useState<string | null | undefined>(() => {
     if (!enabled) return null;
     if (memory.has(name)) return memory.get(name);
@@ -130,7 +179,7 @@ export function useServiceLogo(name: string, enabled: boolean): string | null | 
     return () => {
       active = false;
     };
-  }, [name, enabled]);
+  }, [name, enabled, generationSeen]);
 
   return logo;
 }

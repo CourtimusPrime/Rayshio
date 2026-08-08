@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { db } from '../db/client.js';
 import { dateAtLeast } from './filters.js';
+import { displayName } from './service-name.js';
 
 export interface ProjectedInvoice {
   id: string;
@@ -52,7 +53,7 @@ export async function projectInvoices(
     .innerJoin('billing.email', 'billing.email.id', 'billing.invoices.email_id')
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .select([
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       'billing.invoices.value',
       sql<string>`to_char(billing.invoices.invoice_date, 'YYYY-MM-DD')`.as('invoice_date'),
     ])

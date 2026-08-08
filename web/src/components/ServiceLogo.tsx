@@ -1,3 +1,4 @@
+import { useServiceEditor } from '../state/serviceEditor';
 import { useServiceLogo } from '../utils/logoCache';
 import { lobeIconFor } from './serviceIcons';
 
@@ -64,6 +65,12 @@ interface ServiceLogoProps {
    * whose key is 'railway corporation'.
    */
   allowFetch?: boolean;
+  /**
+   * Whether clicking opens the vendor's editor, when an editor is available at
+   * all. Set false inside `ServiceModal` itself, where the logo is the subject
+   * of the dialog rather than a way into it — a button onto itself.
+   */
+  interactive?: boolean;
 }
 
 /**
@@ -77,17 +84,34 @@ interface ServiceLogoProps {
  * The lobe set is an AI/LLM collection, so tier 1 covers only some vendors;
  * tier 2 is what makes the rest of a mailbox's senders show a real logo.
  */
-export function ServiceLogo({ name, size = 'sm', allowFetch = true }: ServiceLogoProps) {
+export function ServiceLogo({
+  name,
+  size = 'sm',
+  allowFetch = true,
+  interactive = true,
+}: ServiceLogoProps) {
   const { frame, pad, glyph, text } = SIZES[size];
-  const lobeIcon = lobeIconFor(name);
+  const editor = useServiceEditor();
+
+  /*
+   * An uploaded logo outranks the build-time brand mark.
+   *
+   * Tier 1 normally short-circuits before any lookup, which is what keeps this
+   * component free of requests for the vendors the icon set covers. But an org
+   * that uploads its own mark for one of those vendors would otherwise see
+   * nothing change — the file stored, served by the API, and never asked for.
+   */
+  const hasCustomLogo = editor?.customLogos.has(name) ?? false;
+  const lobeIcon = hasCustomLogo ? undefined : lobeIconFor(name);
   // tier 1 needs no lookup, so only ask the server about the vendors it misses
   const logo = useServiceLogo(name, allowFetch && lobeIcon === undefined);
   const brand = brandFor(name);
 
   const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ${frame}`;
 
+  let visual: JSX.Element;
   if (lobeIcon) {
-    return (
+    visual = (
       <span
         aria-hidden="true"
         className={`${shell} ${pad} bg-white ring-1 ring-line`}
@@ -97,28 +121,57 @@ export function ServiceLogo({ name, size = 'sm', allowFetch = true }: ServiceLog
         dangerouslySetInnerHTML={{ __html: lobeIcon }}
       />
     );
-  }
-
-  if (logo) {
-    return (
+  } else if (logo) {
+    visual = (
       <span
         aria-hidden="true"
         className={`${shell} ${pad} bg-white ring-1 ring-line`}
         data-service-logo="favicon"
       >
+        {/*
+          An <img>, never inline markup. A logo here can be an SVG somebody
+          uploaded, and browsers do not execute script inside an image — which
+          is exactly the property the tier above forfeits, and why that one is
+          restricted to build-time package assets.
+        */}
         <img alt="" className="h-full w-full object-contain" src={logo} />
+      </span>
+    );
+  } else {
+    visual = (
+      <span
+        aria-hidden="true"
+        className={`${shell} font-semibold ${text}`}
+        data-service-logo="monogram"
+        style={{ backgroundColor: brand.bg, color: brand.fg }}
+      >
+        {name.slice(0, 2).toUpperCase()}
       </span>
     );
   }
 
+  // Outside the signed-in app there is no editor to open, so the logo stays the
+  // decoration it has always been — which is what keeps the marketing page from
+  // sprouting buttons onto an authenticated modal.
+  if (!interactive || !editor) return visual;
+
   return (
-    <span
-      aria-hidden="true"
-      className={`${shell} font-semibold ${text}`}
-      data-service-logo="monogram"
-      style={{ backgroundColor: brand.bg, color: brand.fg }}
+    <button
+      type="button"
+      aria-haspopup="dialog"
+      aria-label={`Edit ${name}`}
+      onClick={(event) => {
+        // Several call sites put this inside a row that is itself clickable —
+        // an invoice row opening its drawer, an accordion header expanding.
+        // Editing the vendor is a different intent from either.
+        event.stopPropagation();
+        editor.open(name);
+      }}
+      /* `relative` lifts it above the full-row ::after overlay in InvoiceTable,
+         which would otherwise take the click before it ever arrives here. */
+      className="press tap relative z-raised rounded-full transition-opacity hover:opacity-80"
     >
-      {name.slice(0, 2).toUpperCase()}
-    </span>
+      {visual}
+    </button>
   );
 }

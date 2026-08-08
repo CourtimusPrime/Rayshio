@@ -32,6 +32,7 @@ const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 import { APP_TITLES, isAppPath } from './routes';
+import { ServiceEditorProvider } from './state/serviceEditor';
 import { UploadsProvider } from './state/uploads';
 import { WorkspaceProvider, useWorkspace } from './state/workspace';
 import { useNoindex } from './utils/useNoindex';
@@ -63,8 +64,13 @@ export function App() {
       {/* Inside the signed-in tree and outside the router, so a batch started
           on /invoices keeps reporting after the page that started it unmounts. */}
       <UploadsProvider>
-        <Shell />
-        <UploadToast />
+        {/* Inside WorkspaceProvider because it reads meta, and inside the
+            authenticated tree because its absence is what keeps vendor logos
+            inert on the signed-out marketing page. */}
+        <ServiceEditorProvider>
+          <Shell />
+          <UploadToast />
+        </ServiceEditorProvider>
       </UploadsProvider>
     </WorkspaceProvider>
   );

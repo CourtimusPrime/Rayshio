@@ -151,34 +151,49 @@ export function BreakdownDetailList({ mode }: { mode: BreakdownMode }) {
 
               return (
                 <li key={group.key} className="border-b border-line last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => toggle(group.key)}
-                    aria-expanded={isOpen}
-                    className="press-row flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-canvas md:px-6"
-                  >
-                    {group.mark}
-                    <span className="min-w-0">
-                      <span className="block text-footnote font-medium text-ink-900">
-                        {group.label}
-                      </span>
-                      <span className="tnum mt-0.5 block text-caption text-ink-500">
-                        {group.children.length} {childNoun} · {share}% of spend
-                      </span>
-                    </span>
+                  {/*
+                    The mark sits beside the toggle, not inside it.
 
-                    <span className="ml-auto flex items-center gap-3">
-                      <span className="tnum text-body font-medium text-ink-900">
-                        <AnimatedCurrency value={group.total_minor} currency={currency ?? 'USD'} />
+                    A vendor logo is a button now — it opens that vendor's
+                    editor — and a button inside a button is invalid markup that
+                    browsers resolve by dropping one of them, taking its
+                    keyboard behaviour with it. So the row is a flex container
+                    holding the mark and the toggle as siblings, and the toggle
+                    stretches to fill what is left.
+                  */}
+                  <div className="press-row flex w-full items-center gap-3 px-5 py-4 transition-colors hover:bg-canvas md:px-6">
+                    {group.mark}
+                    <button
+                      type="button"
+                      onClick={() => toggle(group.key)}
+                      aria-expanded={isOpen}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-footnote font-medium text-ink-900">
+                          {group.label}
+                        </span>
+                        <span className="tnum mt-0.5 block text-caption text-ink-500">
+                          {group.children.length} {childNoun} · {share}% of spend
+                        </span>
                       </span>
-                      <ChevronDownIcon
-                        className={`h-4 w-4 text-ink-400 transition-transform ${
-                          isOpen ? 'rotate-180' : ''
-                        }`}
-                        strokeWidth={1.75}
-                      />
-                    </span>
-                  </button>
+
+                      <span className="ml-auto flex items-center gap-3">
+                        <span className="tnum text-body font-medium text-ink-900">
+                          <AnimatedCurrency
+                            value={group.total_minor}
+                            currency={currency ?? 'USD'}
+                          />
+                        </span>
+                        <ChevronDownIcon
+                          className={`h-4 w-4 text-ink-400 transition-transform ${
+                            isOpen ? 'rotate-180' : ''
+                          }`}
+                          strokeWidth={1.75}
+                        />
+                      </span>
+                    </button>
+                  </div>
 
                   <AnimatePresence initial={false}>
                     {isOpen && (

@@ -47,6 +47,35 @@ export function apiSend<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, bo
   return request<T>(method, `/api${path}`, body);
 }
 
+/**
+ * Sends one SVG as a raw body, which is what the logo route expects.
+ *
+ * The browser reports `image/svg+xml` for a `.svg` picked from disk, but not
+ * reliably for one dragged from some applications, so the type is set
+ * explicitly rather than taken from the File. The server validates the bytes
+ * regardless — the declared type is the caller's to claim.
+ */
+export async function apiPutSvg<T>(path: string, file: File): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'image/svg+xml' },
+    body: file,
+  });
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const payload = (await res.json()) as { error?: string };
+      if (payload.error) message = payload.error;
+    } catch {
+      // non-JSON error body — keep the status text
+    }
+    throw new ApiError(res.status, message);
+  }
+  return (await res.json()) as T;
+}
+
 export interface UploadResponse {
   invoice_id: number;
   filename: string;

@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { db } from '../db/client.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
+import { displayName } from './service-name.js';
 
 /** Column order here is load-bearing: it is the MCP `list_invoices` wire shape. */
 export interface InvoiceListRow {
@@ -33,9 +34,12 @@ function invoiceListQuery(orgId: number, opts: ListInvoicesOptions) {
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .where('billing.invoices.org_id', '=', orgId);
 
+  // Filters match what the user can see. Someone who renamed a vendor and then
+  // filters by that name must get their invoices back — matching the global
+  // name here would silently return nothing for the name on their own screen.
   // `ilike` without wildcards: case-insensitive exact match, matching the tool's
   // long-standing behaviour.
-  if (opts.service) q = q.where('server.service.name', 'ilike', opts.service);
+  if (opts.service) q = q.where(displayName(orgId), 'ilike', opts.service);
   if (opts.currency) q = q.where('billing.invoices.currency', '=', opts.currency);
   if (opts.status) q = q.where('billing.invoices.status', '=', opts.status);
   if (opts.dateFrom) q = q.where(dateAtLeast('billing.invoices.invoice_date', opts.dateFrom));
@@ -45,7 +49,7 @@ function invoiceListQuery(orgId: number, opts: ListInvoicesOptions) {
     q = q.where((eb) =>
       eb.or([
         eb('billing.invoices.invoice_number', 'ilike', term),
-        eb('server.service.name', 'ilike', term),
+        eb(displayName(orgId), 'ilike', term),
         eb('billing.email.subject', 'ilike', term),
       ]),
     );
@@ -60,7 +64,7 @@ export async function listInvoices(
   const rows = await invoiceListQuery(orgId, opts)
     .select([
       'billing.invoices.id as invoice_id',
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       'billing.invoices.invoice_number',
       'billing.invoices.value',
       'billing.invoices.currency',
@@ -141,7 +145,7 @@ export async function getInvoice(orgId: number, invoiceId: number) {
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
     .selectAll('billing.invoices')
     .select([
-      'server.service.name as service',
+      displayName(orgId).as('service'),
       'billing.email.subject as email_subject',
       'billing.email.delivered_at',
     ])
