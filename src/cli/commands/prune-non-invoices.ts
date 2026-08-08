@@ -1,37 +1,20 @@
 import { sql } from 'kysely';
 import { db, pool } from '../../db/client.js';
+import { INBOUND_MONEY_REASON, NOT_AN_INVOICE_REASON } from '../../pipeline/failure-reasons.js';
 
 /**
- * Retires invoices that were never invoices.
+ * Retires invoices that were never invoices, and inbound money counted as spend.
  *
- * Trusting the sender rather than the message meant every announcement from a
- * known billing address landed as an invoice — product updates, "payment method
- * added", "your workspace is ready". They extract to a total of zero, so they
- * add nothing to spend, but they inflate the invoice count and put phantom
- * vendors in the breakdowns.
+ * The reason strings live in `src/pipeline/failure-reasons.ts` alongside the
+ * classifier that reads them — this command is one of two writers, and the two
+ * have to agree on the wording or the API will report rows this command retired
+ * as unexplained errors.
  *
- * They are marked `failed`, not deleted. Failed invoices are already excluded
- * from every spend query and every count, so the numbers correct themselves,
- * while the row stays visible under the Invoices page's "failed" filter — which
- * is what makes this reversible if the rule ever proves too broad. Deleting
- * would also re-open the door for the next sync to ingest them again.
+ * The SQL patterns below are the twins of `INBOUND_MONEY` and `SIGNUP_NOTICE`
+ * in `src/pipeline/heuristics.ts` and must stay narrow for the same reason:
+ * "payment received" is a vendor confirming that you paid them, and for Google
+ * Cloud those are the only record of that spend.
  */
-export const NOT_AN_INVOICE_REASON = 'not an invoice: no amount on the document';
-
-/**
- * Retires the other kind of non-invoice: money coming *in*.
- *
- * A zero-value row adds nothing to spend, so it only distorts counts. These do
- * worse — they carry a real amount and are counted as cost the org never
- * incurred. The heuristic now rejects them at ingest; this retires the ones
- * already in the table.
- *
- * The pattern is the SQL twin of `INBOUND_MONEY` in `src/pipeline/heuristics.ts`
- * and must stay narrow for the same reason: "payment received" is a vendor
- * confirming that you paid them, and for Google Cloud those are the only record
- * of that spend.
- */
-export const INBOUND_MONEY_REASON = 'not an invoice: inbound payment, not a bill';
 const INBOUND_MONEY_SQL = '\\ypayouts?\\y|payment of .* from ';
 
 /**

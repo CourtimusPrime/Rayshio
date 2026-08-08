@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { DownloadIcon, XIcon } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { DownloadIcon, Loader2Icon, Trash2Icon, XIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useInvoice } from '../api/hooks';
+import { useDeleteInvoice, useInvoice } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
 import { useBackgroundInert } from '../hooks/useBackgroundInert';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -44,6 +44,73 @@ export function InvoiceDrawer({
       {invoiceId !== null && <DrawerPanel invoiceId={invoiceId} onClose={onClose} />}
     </AnimatePresence>,
     host,
+  );
+}
+
+/**
+ * Delete, behind an in-place confirmation rather than `window.confirm`.
+ *
+ * A native dialog would be the shorter code, but it blocks the whole tab and
+ * renders outside the drawer's focus trap — so the one destructive action in
+ * the product would be the one place keyboard focus escapes the modal. The
+ * two-step button keeps the decision inside the sheet, and the arming step is
+ * what makes an accidental click cost nothing.
+ *
+ * The drawer closes on success, because the invoice it was describing no longer
+ * exists — leaving it open would refetch a 404 and show an error where the
+ * answer is simply "it worked".
+ */
+function DeleteInvoice({ invoiceId, onDeleted }: { invoiceId: number; onDeleted: () => void }) {
+  const [armed, setArmed] = useState(false);
+  const { mutate, isPending, error } = useDeleteInvoice();
+
+  if (!armed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setArmed(true)}
+        className="press tap inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-500 transition-colors hover:border-danger-text/40 hover:bg-danger-soft hover:text-danger-text"
+      >
+        <Trash2Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+        Delete
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-lg border border-danger-text/30 bg-danger-soft px-3.5 py-3">
+      <p className="text-footnote text-ink-900">
+        Delete this invoice and its PDF? Uploads have no other copy, so this cannot be undone.
+      </p>
+      {error && (
+        <p role="alert" className="mt-1.5 text-caption text-danger-text">
+          {error.message}
+        </p>
+      )}
+      <div className="mt-2.5 flex items-center gap-2">
+        {/* Bordered rather than a solid danger fill: --danger-solid is the same
+            rose in both themes and only ever carries StatusBadge's 6px dot,
+            where its contrast never has to hold up under text. --danger-text is
+            the token tuned to be legible in both themes. */}
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => mutate(invoiceId, { onSuccess: onDeleted })}
+          className="press tap inline-flex items-center gap-1.5 rounded-lg border border-danger-text/40 bg-surface px-3 py-1.5 text-footnote font-medium text-danger-text transition-opacity hover:opacity-80 disabled:opacity-60"
+        >
+          {isPending && <Loader2Icon className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />}
+          {isPending ? 'Deleting…' : 'Delete invoice'}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setArmed(false)}
+          className="press tap rounded-lg px-3 py-1.5 text-footnote font-medium text-ink-700 transition-colors hover:bg-surface disabled:opacity-60"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -193,21 +260,29 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
                 </div>
               </dl>
 
-              {data.has_pdf ? (
-                <a
-                  href={`/api/invoices/${data.invoice_id}/pdf`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
-                >
-                  <DownloadIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Open PDF
-                </a>
-              ) : (
-                <p className="text-caption text-ink-400">
-                  No PDF — this invoice was extracted from the email body.
-                </p>
-              )}
+              <div className="flex flex-wrap items-center gap-3">
+                {data.has_pdf ? (
+                  <a
+                    href={`/api/invoices/${data.invoice_id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-footnote font-medium text-ink-700 transition-colors hover:bg-canvas"
+                  >
+                    <DownloadIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Open PDF
+                  </a>
+                ) : (
+                  <p className="text-caption text-ink-400">
+                    No PDF — this invoice was extracted from the email body.
+                  </p>
+                )}
+
+                {/* Uploads only. A mailbox invoice would be re-ingested by the
+                    next sync, so offering the action would be a lie. */}
+                {data.is_upload && (
+                  <DeleteInvoice invoiceId={data.invoice_id} onDeleted={onClose} />
+                )}
+              </div>
             </>
           )}
         </div>

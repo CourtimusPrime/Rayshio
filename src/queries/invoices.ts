@@ -170,6 +170,24 @@ export async function getLineItems(orgId: number, invoiceId: number) {
     .execute();
 }
 
+/**
+ * Pipeline state for a set of invoices, scoped to the org that owns them.
+ *
+ * Ids the org does not own are absent from the result rather than rejected —
+ * see the route for why that distinction matters. The `org_id` filter is what
+ * enforces it; do not be tempted to drop it because the ids "came from us".
+ */
+export async function getInvoiceOutcomes(orgId: number, invoiceIds: number[]) {
+  if (invoiceIds.length === 0) return [];
+  return db
+    .selectFrom('billing.invoices')
+    .select(['id', 'status', 'failure_reason'])
+    .where('id', 'in', invoiceIds)
+    .where('org_id', '=', orgId)
+    .orderBy('id')
+    .execute();
+}
+
 export async function getInvoicePdfRef(orgId: number, invoiceId: number) {
   return db
     .selectFrom('billing.invoices')

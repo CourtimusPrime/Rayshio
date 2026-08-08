@@ -1,13 +1,14 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  DepartmentMode,
   CalendarResponse,
   CategoriesResponse,
+  DepartmentMode,
   InvoiceDetail,
   InvoicesResponse,
   Meta,
   PeriodType,
   ReportResponse,
+  ServiceCategoriesResponse,
   ServicesResponse,
   Summary,
 } from '../types';
@@ -134,6 +135,26 @@ export function useCategories(currency: string | undefined, month: string) {
   });
 }
 
+/**
+ * The Breakdown page's Service tab: the same month's line items nested
+ * service-first instead of category-first.
+ *
+ * Its own query key, not a parameter on `monthQueries.categories` — the
+ * prefetcher warms that key for every month, and folding a second shape into it
+ * would either double the prefetch or serve one tab the other's body.
+ */
+export function useServiceCategories(currency: string | undefined, month: string) {
+  return useQuery({
+    queryKey: ['categories', 'by-service', currency, month],
+    queryFn: () =>
+      apiGet<ServiceCategoriesResponse>('/categories', { currency, month, by: 'service' }),
+    placeholderData: keepPreviousData,
+    staleTime: PERIOD_STALE_TIME,
+    enabled: Boolean(currency),
+    retry: retryUnlessUnauthorized,
+  });
+}
+
 export interface InvoiceQuery {
   currency: string | undefined;
   month?: string | undefined;
@@ -162,6 +183,28 @@ export function useInvoice(invoiceId: number | null) {
     queryFn: () => apiGet<InvoiceDetail>(`/invoices/${invoiceId}`),
     enabled: invoiceId !== null,
     retry: retryUnlessUnauthorized,
+  });
+}
+
+/**
+ * Deletes an uploaded invoice. The server refuses anything that came from the
+ * mailbox, so the button that calls this is only offered for uploads.
+ *
+ * Invalidates everything rather than a hand-picked list of keys. An invoice
+ * contributes to the summary, the vendor and category breakdowns, the calendar,
+ * every report period and the "last ingest" meta — enumerating those is a list
+ * that goes stale the moment a new aggregate is added, and the cost of being
+ * wrong is a figure that silently keeps counting a deleted invoice.
+ */
+export function useDeleteInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (invoiceId: number) => apiSend<void>('DELETE', `/invoices/${invoiceId}`),
+    onSuccess: (_data, invoiceId) => {
+      // drop the detail outright — refetching it would 404
+      queryClient.removeQueries({ queryKey: ['invoice', invoiceId] });
+      void queryClient.invalidateQueries();
+    },
   });
 }
 

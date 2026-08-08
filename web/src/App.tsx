@@ -2,8 +2,10 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSession } from './api/hooks';
 import { useMonthPrefetch } from './api/prefetch';
+import { RouteSkeleton } from './components/RouteSkeleton';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { UploadToast } from './components/UploadToast';
 import { LoadingBlock } from './components/states';
 import { Landing } from './pages/Landing';
 import { NoWorkspace } from './pages/NoWorkspace';
@@ -30,6 +32,7 @@ const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 import { APP_TITLES, isAppPath } from './routes';
+import { UploadsProvider } from './state/uploads';
 import { WorkspaceProvider, useWorkspace } from './state/workspace';
 import { useNoindex } from './utils/useNoindex';
 import { useScrollEdge } from './utils/useScrollEdge';
@@ -57,7 +60,12 @@ export function App() {
 
   return (
     <WorkspaceProvider>
-      <Shell />
+      {/* Inside the signed-in tree and outside the router, so a batch started
+          on /invoices keeps reporting after the page that started it unmounts. */}
+      <UploadsProvider>
+        <Shell />
+        <UploadToast />
+      </UploadsProvider>
     </WorkspaceProvider>
   );
 }
@@ -140,9 +148,18 @@ function Shell() {
         <div ref={sentinel} aria-hidden="true" className="-mb-px h-px shrink-0" />
         <TopBar title={APP_TITLES[pathname] ?? 'Dashboard'} scrolled={!atTop} />
         <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-6 md:px-8 md:py-8">
-          {/* The fallback matches the height of a page's first card, so paging
-              between routes does not collapse the scroller and bounce the bar. */}
-          <Suspense fallback={<LoadingBlock className="h-56" />}>
+          {/*
+            The fallback traces the arriving page's own layout rather than
+            being one generic block. It still keeps the scroller from
+            collapsing — which is why the old block existed — but it no longer
+            resizes when the real page lands, and it tells the user which tab
+            they are waiting on.
+
+            Keyed on pathname so React tears the old skeleton down and builds
+            the new one when the route changes mid-flight; without the key a
+            fast second navigation keeps showing the first tab's shape.
+          */}
+          <Suspense fallback={<RouteSkeleton key={pathname} pathname={pathname} />}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/breakdown" element={<Breakdown />} />

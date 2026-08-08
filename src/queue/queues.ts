@@ -38,6 +38,24 @@ export function ingestionQueue(): Queue {
   return queue;
 }
 
+/**
+ * Drops a job that has not run yet, best-effort.
+ *
+ * Called when the thing a job was going to work on is deleted. A miss is not a
+ * failure: the job may have already completed, already been trimmed by
+ * `removeOnComplete`, or be active right now (BullMQ refuses to remove a locked
+ * job and throws). None of those change what the caller does next — the row is
+ * going either way, and a job that runs against a deleted invoice fails
+ * harmlessly.
+ */
+export async function removeJob(jobId: string): Promise<void> {
+  try {
+    await ingestionQueue().remove(jobId);
+  } catch {
+    // locked, missing, or already gone — nothing to undo
+  }
+}
+
 export async function enqueue<N extends JobName>(
   name: N,
   payload: JobPayloads[N],

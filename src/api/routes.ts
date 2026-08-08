@@ -6,8 +6,13 @@ import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
+import { classifyOutcome } from '../pipeline/failure-reasons.js';
 import { retryExtraction } from '../pipeline/retry.js';
-import { createUploadedInvoice } from '../pipeline/uploads.js';
+import {
+  createUploadedInvoice,
+  deleteUploadedInvoice,
+  isUploadedInvoice,
+} from '../pipeline/uploads.js';
 import {
   ConversionTracker,
   convertInvoices,
@@ -15,6 +20,7 @@ import {
   totalsByCategory,
   totalsByMonth,
   totalsByService,
+  totalsByServiceCategory,
 } from '../queries/converted.js';
 import { invoiceFacts, lineItemFacts } from '../queries/facts.js';
 import {
@@ -27,6 +33,7 @@ import {
   countInvoices,
   dominantCategories,
   getInvoice,
+  getInvoiceOutcomes,
   getInvoicePdfRef,
   getLineItems,
   lastIngestAt,
@@ -53,6 +60,12 @@ import {
 import { projectInvoices } from '../queries/projections.js';
 import { senderAddressesFor } from '../queries/services.js';
 import { changePercent, displayStatus } from './serializers.js';
+
+/**
+ * Ceiling on `GET /invoices/outcomes`. Above the largest plausible upload batch
+ * and far below "the whole table", which is the only thing it is guarding.
+ */
+const MAX_OUTCOME_IDS = 200;
 
 const TREND_MONTHS = 6;
 /** How far back projection looks for a cadence. */
@@ -288,10 +301,26 @@ export function apiRouter(): Router {
     });
   });
 
+  /**
+   * The month's line items as a two-level breakdown.
+   *
+   * `by=category` (the default, and the pre-existing behaviour) nests services
+   * under categories. `by=service` pivots it: categories under services. Same
+   * rows, same conversion, same totals — only the nesting differs, which is why
+   * it is one endpoint rather than two that could drift.
+   *
+   * The two responses use different keys (`categories` vs `services`) so a body
+   * says what it is without the caller having to remember what it asked for.
+   */
   router.get('/categories', async (req, res) => {
     const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
     const month = optionalMonth(req.query.month);
+
+    const by = optionalString(req.query.by) ?? 'category';
+    if (by !== 'category' && by !== 'service') {
+      throw new BadRequest("by must be 'category' or 'service'");
+    }
 
     const lineItems = await lineItemFacts(orgId, monthRangeFilter(month));
     const tracker = new ConversionTracker(currency);
@@ -303,7 +332,9 @@ export function apiRouter(): Router {
     res.json({
       currency,
       month,
-      categories: totalsByCategory(lineItems, convert, tracker),
+      ...(by === 'service'
+        ? { services: totalsByServiceCategory(lineItems, convert, tracker) }
+        : { categories: totalsByCategory(lineItems, convert, tracker) }),
       conversion: tracker.meta(),
     });
   });
@@ -371,6 +402,53 @@ export function apiRouter(): Router {
     });
   });
 
+  /**
+   * What became of a set of invoices — one request, not one per id.
+   *
+   * Exists for the upload toast, which watches a whole batch at once. Built the
+   * obvious way it would be N `GET /invoices/:id` calls every poll tick, so a
+   * thirteen-file upload would be thirteen round-trips every five seconds for
+   * as long as extraction takes.
+   *
+   * Registered before `/invoices/:id`, and it has to stay that way: Express
+   * matches in registration order, so the parameterised route would otherwise
+   * swallow this one and try to parse "outcomes" as an id.
+   */
+  router.get('/invoices/outcomes', async (req, res) => {
+    const orgId = orgOf(req);
+
+    const ids = String(req.query.ids ?? '')
+      .split(',')
+      .map((part) => Number(part.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+
+    if (ids.length === 0) {
+      res.json({ outcomes: [] });
+      return;
+    }
+    // A bound, so a hand-written query string cannot ask for the whole table.
+    if (ids.length > MAX_OUTCOME_IDS) {
+      throw new BadRequest(`too many ids — at most ${MAX_OUTCOME_IDS} per request`);
+    }
+
+    /*
+     * Ids belonging to another org are simply absent from the response.
+     *
+     * Not 403, and not an error: either would confirm the id exists, which is
+     * exactly what an id-probing caller wants to learn. "Not yours" and "not a
+     * thing" have to be indistinguishable, so the org filter just removes them.
+     */
+    const rows = await getInvoiceOutcomes(orgId, ids);
+
+    res.json({
+      outcomes: rows.map((row) => ({
+        invoice_id: Number(row.id),
+        outcome: classifyOutcome(row.status, row.failure_reason),
+        failure_reason: row.failure_reason,
+      })),
+    });
+  });
+
   router.get('/invoices/:id', async (req, res) => {
     const orgId = orgOf(req);
     const invoiceId = Number(req.params.id);
@@ -381,7 +459,10 @@ export function apiRouter(): Router {
       res.status(404).json({ error: `invoice ${invoiceId} not found` });
       return;
     }
-    const lineItems = await getLineItems(orgId, invoiceId);
+    const [lineItems, isUpload] = await Promise.all([
+      getLineItems(orgId, invoiceId),
+      isUploadedInvoice(orgId, invoiceId),
+    ]);
 
     res.json({
       invoice_id: Number(invoice.id),
@@ -399,6 +480,8 @@ export function apiRouter(): Router {
       email_subject: invoice.email_subject,
       delivered_at: invoice.delivered_at,
       has_pdf: invoice.pdf_id !== null,
+      /** Uploaded by hand rather than ingested from the mailbox — the only kind that can be deleted. */
+      is_upload: isUpload,
       line_items: lineItems.map((li) => ({
         id: Number(li.id),
         description: li.description,
@@ -446,7 +529,25 @@ export function apiRouter(): Router {
       const filename = rawName.replace(/[^\w. -]+/g, '-').slice(0, 200);
 
       const uploaded = await createUploadedInvoice(orgId, filename, body);
-      res.status(202).json({ invoice_id: uploaded.invoiceId, filename: uploaded.filename });
+
+      /*
+       * 200 for a duplicate, 202 for a new one. The status code carries the
+       * distinction as well as the body does: 202 promises work has been
+       * queued, and for a duplicate none has — nothing was written and no
+       * extraction will run. `invoice_id` points at the row the org already
+       * had, so the client can link to it.
+       */
+      if (uploaded.kind === 'duplicate') {
+        res.status(200).json({
+          invoice_id: uploaded.invoiceId,
+          filename: uploaded.filename,
+          duplicate: true,
+        });
+        return;
+      }
+      res
+        .status(202)
+        .json({ invoice_id: uploaded.invoiceId, filename: uploaded.filename, duplicate: false });
     },
   );
 
@@ -471,6 +572,30 @@ export function apiRouter(): Router {
       return;
     }
     res.status(202).json({ invoice_id: invoiceId, status: 'queued' });
+  });
+
+  /**
+   * Delete one uploaded invoice, its line items and its stored PDF.
+   *
+   * Uploads only. A mailbox-ingested invoice would be re-created by the next
+   * sync, so deleting it would look like it silently failed; an upload has no
+   * source to re-read, which is what makes the delete meaningful.
+   */
+  router.delete('/invoices/:id', async (req, res) => {
+    const orgId = orgOf(req);
+    const invoiceId = Number(req.params.id);
+    if (!Number.isInteger(invoiceId)) throw new BadRequest('invalid invoice id');
+
+    const result = await deleteUploadedInvoice(orgId, invoiceId);
+    if (!result.deleted) {
+      // 404 for "not in this workspace" — which covers another tenant's invoice
+      // too, so the caller cannot probe for ids. 409 for a real invoice this
+      // endpoint refuses to touch.
+      const status = result.reason?.includes('not found') ? 404 : 409;
+      res.status(status).json({ error: result.reason });
+      return;
+    }
+    res.status(204).end();
   });
 
   router.get('/invoices/:id/pdf', async (req, res) => {

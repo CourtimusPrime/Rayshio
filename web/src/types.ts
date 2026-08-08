@@ -102,6 +102,27 @@ export interface CategoriesResponse {
   conversion: ConversionMeta;
 }
 
+/** One category's share of a single service's spend — the pivot of `CategoryContribution`. */
+export interface ServiceContribution {
+  category: Category;
+  total_minor: number;
+  note: string;
+}
+
+export interface ServiceBreakdown {
+  service: string;
+  total_minor: number;
+  categories: ServiceContribution[];
+}
+
+/** `GET /api/categories?by=service` — the same spend, nested the other way up. */
+export interface ServiceCategoriesResponse {
+  currency: string;
+  month: string;
+  services: ServiceBreakdown[];
+  conversion: ConversionMeta;
+}
+
 export interface InvoiceRow {
   invoice_id: number;
   service: string;
@@ -155,7 +176,24 @@ export interface InvoiceDetail {
   email_subject: string | null;
   delivered_at: string;
   has_pdf: boolean;
+  /** Uploaded by hand rather than ingested from the mailbox — only these can be deleted. */
+  is_upload: boolean;
   line_items: LineItem[];
+}
+
+/**
+ * What became of one uploaded file. Mirrors `Outcome` in
+ * `src/pipeline/failure-reasons.ts`, which is where the classification actually
+ * happens — the client never inspects a `failure_reason` string itself.
+ */
+export type Outcome = 'pending' | 'added' | 'duplicate' | 'not_invoice' | 'error';
+
+export interface OutcomesResponse {
+  outcomes: {
+    invoice_id: number;
+    outcome: Outcome;
+    failure_reason: string | null;
+  }[];
 }
 
 export interface ReceivedEntry {

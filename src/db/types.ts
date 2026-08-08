@@ -68,6 +68,10 @@ export interface BillingInvoices {
    * GridFS file id in MongoDB; null until fetched
    */
   pdf_id: string | null;
+  /**
+   * sha256 hex of the uploaded PDF bytes; null for mailbox-ingested invoices
+   */
+  pdf_sha256: string | null;
   period_end: Timestamp | null;
   period_start: Timestamp | null;
   status: Generated<string>;

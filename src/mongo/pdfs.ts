@@ -31,6 +31,23 @@ export async function putPdf(id: string, data: Buffer, originalFilename: string)
   });
 }
 
+/**
+ * Removes the blob stored under `id`, if it is still there.
+ *
+ * Deliberately forgiving about a miss. The caller deletes the Postgres row that
+ * points here, and a blob that has already gone (a half-finished earlier delete,
+ * a `putPdf` that replaced it) must not be able to block that — the row is the
+ * thing that makes the invoice visible, and an orphaned blob costs storage only.
+ */
+export async function deletePdf(id: string): Promise<void> {
+  await mongoClient.connect();
+  const b = pdfBucket();
+  const files = await b.find({ filename: id }).toArray();
+  for (const file of files) {
+    await b.delete(file._id);
+  }
+}
+
 export async function getPdf(id: string): Promise<Buffer> {
   await mongoClient.connect();
   const chunks: Buffer[] = [];

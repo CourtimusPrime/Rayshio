@@ -5,9 +5,61 @@ import { extractInvoice as llmExtract } from '../../llm/extract.js';
 import type { Extraction } from '../../llm/schemas.js';
 import { getPdf } from '../../mongo/pdfs.js';
 import type { JobPayloads } from '../../queue/queues.js';
+import { DUPLICATE_PREFIX, NOT_AN_INVOICE_REASON } from '../failure-reasons.js';
 import { pdfToText } from '../pdf-text.js';
 import { reconcile } from '../reconcile.js';
 import { attachUploadedInvoiceVendor } from '../uploads.js';
+
+/**
+ * An invoice this org already has from this vendor, under this invoice number.
+ *
+ * The natural key the documents themselves carry. The upload endpoint catches
+ * byte-identical re-uploads earlier and far more cheaply via the PDF digest;
+ * this is the layer that still works when the same invoice is re-downloaded
+ * (so the bytes differ) or uploaded after the mailbox already ingested it.
+ *
+ * Deliberately narrow. Same org, same vendor, and only against invoices that
+ * actually made it to `parsed` — comparing against failed rows would let one
+ * bad extraction poison every later attempt at the same document. A vendor that
+ * re-issues an invoice number would false-positive here; that is the known cost
+ * of the rule, and it is why the loser is marked `failed` (reversible, visible
+ * under the Invoices "failed" filter) rather than deleted.
+ *
+ * Returns undefined when the document carries no invoice number: there is no
+ * key to compare, and treating "unnumbered" as a value would collapse every
+ * unnumbered invoice in the org into one.
+ */
+async function findExistingInvoiceNumber(
+  orgId: number,
+  invoiceId: number,
+  invoiceNumber: string | null,
+): Promise<number | undefined> {
+  if (!invoiceNumber) return undefined;
+
+  const self = await db
+    .selectFrom('billing.invoices as i')
+    .innerJoin('billing.email as e', 'e.id', 'i.email_id')
+    .select('e.server_id as serviceId')
+    .where('i.id', '=', invoiceId)
+    .executeTakeFirst();
+  if (!self) return undefined;
+
+  // The join is the vendor filter *and* part of the org filter; `i.org_id` is
+  // still applied directly so this cannot widen if the join ever changes.
+  const row = await db
+    .selectFrom('billing.invoices as i')
+    .innerJoin('billing.email as e', 'e.id', 'i.email_id')
+    .select('i.id as id')
+    .where('i.org_id', '=', orgId)
+    .where('e.server_id', '=', self.serviceId)
+    .where('i.invoice_number', '=', invoiceNumber)
+    .where('i.status', '=', 'parsed')
+    .where('i.id', '!=', invoiceId)
+    .orderBy('i.id')
+    .executeTakeFirst();
+
+  return row ? Number(row.id) : undefined;
+}
 
 /** Marks the invoice failed with a reason. Business failures are terminal, not retried. */
 async function markFailed(invoiceId: number, reason: string): Promise<string> {
@@ -85,7 +137,35 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
    * a real document with a real effect on spend.
    */
   if (extraction.total_minor === 0) {
-    return markFailed(invoiceId, 'not an invoice: no amount on the document');
+    return markFailed(invoiceId, NOT_AN_INVOICE_REASON);
+  }
+
+  /*
+   * Vendor attribution moved ahead of the write so the duplicate check below
+   * has a real vendor to compare against.
+   *
+   * An upload hangs off the "Uploaded" service until this call re-points it at
+   * whoever the document names. Run afterwards — as it used to be — and every
+   * upload still looks like the same vendor at duplicate-check time, so two
+   * unrelated invoices that happened to share an invoice number would collide
+   * while a genuine re-upload of a Microsoft bill would not be compared against
+   * the Microsoft invoice already on file.
+   *
+   * Still a no-op for a Gmail-ingested invoice, which keeps the vendor its
+   * sending address already established.
+   */
+  const vendor = await attachUploadedInvoiceVendor(invoiceId, extraction.vendor_name);
+
+  const duplicateOf = await findExistingInvoiceNumber(
+    Number(invoice.org_id),
+    invoiceId,
+    extraction.invoice_number,
+  );
+  if (duplicateOf !== undefined) {
+    return markFailed(
+      invoiceId,
+      `${DUPLICATE_PREFIX}invoice ${extraction.invoice_number} already recorded as #${duplicateOf}`,
+    );
   }
 
   await db.transaction().execute(async (trx) => {
@@ -127,10 +207,6 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
       )
       .execute();
   });
-
-  // A no-op unless this invoice came from an upload; a Gmail-ingested one keeps
-  // the vendor its sending address already established.
-  const vendor = await attachUploadedInvoiceVendor(invoiceId, extraction.vendor_name);
 
   const attribution = vendor ? ` (vendor: ${vendor})` : '';
   return `parsed: ${extraction.line_items.length} line items, total ${extraction.total_minor} ${extraction.currency}${attribution}`;
