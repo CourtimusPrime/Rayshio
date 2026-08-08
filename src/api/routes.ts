@@ -22,9 +22,11 @@ import {
 } from '../pipeline/uploads.js';
 import {
   deleteCategoryRule,
+  deleteCategoryRules,
   lineItemContext,
   rulesForLineItem,
   setCategoryRule,
+  setCategoryRules,
 } from '../queries/category-rules.js';
 import {
   ConversionTracker,
@@ -73,6 +75,7 @@ import {
 import { projectInvoices } from '../queries/projections.js';
 import {
   customLogoServices,
+  renamedServices,
   senderAddressesFor,
   serviceByDisplayName,
   serviceOverrideFor,
@@ -85,6 +88,12 @@ import { changePercent, displayStatus } from './serializers.js';
  * and far below "the whole table", which is the only thing it is guarding.
  */
 const MAX_OUTCOME_IDS = 200;
+
+/**
+ * Ceiling on how many line texts one breakdown cell may file at once. Above any
+ * real cell and far below "every description this org has".
+ */
+const MAX_RULE_DESCRIPTIONS = 200;
 
 const TREND_MONTHS = 6;
 /** How far back projection looks for a cadence. */
@@ -147,14 +156,17 @@ export function apiRouter(): Router {
 
   router.get('/meta', async (req, res) => {
     const orgId = orgOf(req);
-    const [org, currencies, accounts, lastIngest, months, customLogos] = await Promise.all([
-      getOrg(orgId),
-      listCurrencies(orgId),
-      listConnectedAccounts(orgId),
-      lastIngestAt(orgId),
-      listMonthsWithData(orgId),
-      customLogoServices(orgId),
-    ]);
+    const [org, currencies, accounts, lastIngest, months, customLogos, renamed] = await Promise.all(
+      [
+        getOrg(orgId),
+        listCurrencies(orgId),
+        listConnectedAccounts(orgId),
+        lastIngestAt(orgId),
+        listMonthsWithData(orgId),
+        customLogoServices(orgId),
+        renamedServices(orgId),
+      ],
+    );
     const account = accounts.find((a) => a.status === 'active') ?? accounts[0];
     const fiscalStart = org?.fiscal_year_start_month ?? 1;
     const monthKeys = months.map((m) => m.month);
@@ -164,6 +176,8 @@ export function apiRouter(): Router {
         name: org?.name ?? 'Workspace',
         default_currency: org?.default_currency ?? null,
         department_mode: org?.department_mode ?? 'single',
+        /** 'hide' omits rows charging exactly 0 from every list and breakdown. */
+        zero_charge_mode: org?.zero_charge_mode ?? 'hide',
       },
       account: account
         ? {
@@ -196,6 +210,12 @@ export function apiRouter(): Router {
        * vendor the icon set covers would silently do nothing.
        */
       custom_logo_services: customLogos,
+      /**
+       * Renamed vendors, displayed name -> discovered name. ServiceLogo resolves
+       * its build-time brand mark from the discovered name, so a rename does not
+       * take the logo with it.
+       */
+      renamed_services: renamed,
     });
   });
 
@@ -274,8 +294,12 @@ export function apiRouter(): Router {
     );
     const converted = convertInvoices(facts, convert, tracker, currency);
 
+    const dropZeroTotals = (await getOrg(orgId))?.zero_charge_mode !== 'show';
     const inMonth = (m: string) => converted.filter((c) => c.effective_date.slice(0, 7) === m);
-    const current = totalsByService(inMonth(month));
+    const current = totalsByService(inMonth(month), { dropZeroTotals });
+    // The prior month is only a lookup for the change figure, so it keeps every
+    // vendor — dropping one there would report a vendor's first month as a rise
+    // from nothing when it actually netted zero.
     const priorByService = new Map(
       totalsByService(inMonth(previous)).map((r) => [r.service, r.total_minor]),
     );
@@ -335,7 +359,16 @@ export function apiRouter(): Router {
       return;
     }
 
-    const domain = senders.map((s) => logoDomainFor(name, s)).find((d) => d !== undefined);
+    /*
+     * Resolved from the *discovered* name, not what this org renamed it to.
+     *
+     * `logoDomainFor` reads the vendor name to spot payment processors and to
+     * apply its overrides, so passing a display name means renaming a vendor
+     * silently changes — or loses — its logo. Renaming is a labelling decision;
+     * it says nothing about which company's mark belongs on the row.
+     */
+    const lookupName = service?.canonical_name ?? name;
+    const domain = senders.map((s) => logoDomainFor(lookupName, s)).find((d) => d !== undefined);
     if (!domain) {
       // every sender is a payment processor and no override names the vendor
       res.json({ data_url: null });
@@ -412,6 +445,82 @@ export function apiRouter(): Router {
       scope === 'vendor' ? null : context.description,
     );
     res.json({ line_item_id: lineItemId, scope, removed, category: context.storedCategory });
+  });
+
+  /**
+   * Files a whole breakdown cell — one rule per line text, or one for the vendor.
+   *
+   * The Breakdown page's sub-items are (vendor x category) cells rather than
+   * rows, and a cell can cover several different line texts. Re-filing what the
+   * user sees as one row therefore writes one rule per text, in one
+   * transaction, so a cell cannot end up half moved.
+   *
+   * Keyed on the displayed vendor name because that is what the page holds;
+   * `serviceByDisplayName` is org-filtered, so another tenant's vendor resolves
+   * to nothing rather than to their data.
+   */
+  router.put('/category-rules', async (req, res) => {
+    const orgId = orgOf(req);
+    const body = req.body as { service?: unknown; descriptions?: unknown; category?: unknown };
+
+    const serviceName = typeof body.service === 'string' ? body.service : '';
+    if (!serviceName) throw new BadRequest('service is required');
+
+    const category = typeof body.category === 'string' ? body.category : '';
+    if (!(CATEGORIES as readonly string[]).includes(category)) {
+      throw new BadRequest(`unknown category '${category}'`);
+    }
+
+    // `null` is the vendor-wide rule; an array is one rule per text. An empty
+    // array is a caller mistake rather than a third meaning.
+    let descriptions: string[] | null;
+    if (body.descriptions === null || body.descriptions === undefined) {
+      descriptions = null;
+    } else if (
+      Array.isArray(body.descriptions) &&
+      body.descriptions.every((d) => typeof d === 'string')
+    ) {
+      if (body.descriptions.length === 0) throw new BadRequest('descriptions cannot be empty');
+      if (body.descriptions.length > MAX_RULE_DESCRIPTIONS) {
+        throw new BadRequest(`too many descriptions — at most ${MAX_RULE_DESCRIPTIONS}`);
+      }
+      descriptions = body.descriptions as string[];
+    } else {
+      throw new BadRequest('descriptions must be an array of strings, or null for the vendor');
+    }
+
+    const service = await serviceByDisplayName(orgId, serviceName);
+    if (!service) {
+      res.status(404).json({ error: `no service named ${serviceName}` });
+      return;
+    }
+
+    const written = await setCategoryRules(
+      orgId,
+      Number(service.service_id),
+      descriptions,
+      category,
+    );
+    res.json({ service: service.display_name, category, rules_written: written });
+  });
+
+  /** Clears the rules a breakdown cell set, restoring the classifier's answers. */
+  router.delete('/category-rules', async (req, res) => {
+    const orgId = orgOf(req);
+    const serviceName = optionalString(req.query.service);
+    if (!serviceName) throw new BadRequest('service is required');
+
+    const raw = optionalString(req.query.descriptions);
+    // Newline-separated: a line-item description may itself contain a comma.
+    const descriptions = raw ? raw.split('\n').filter((d) => d.length > 0) : null;
+
+    const service = await serviceByDisplayName(orgId, serviceName);
+    if (!service) {
+      res.status(404).json({ error: `no service named ${serviceName}` });
+      return;
+    }
+    const removed = await deleteCategoryRules(orgId, Number(service.service_id), descriptions);
+    res.json({ service: service.display_name, removed });
   });
 
   /** Which rules currently apply to a line item — shown in the picker. */
@@ -602,6 +711,10 @@ export function apiRouter(): Router {
       throw new BadRequest("by must be 'category' or 'service'");
     }
 
+    // Row-level zero filtering happens in the query; this drops groups whose
+    // *total* is zero, which rows alone cannot catch — a charge and its credit
+    // are both non-zero and still sum to nothing.
+    const dropZeroTotals = (await getOrg(orgId))?.zero_charge_mode !== 'show';
     const lineItems = await lineItemFacts(orgId, monthRangeFilter(month));
     const tracker = new ConversionTracker(currency);
     const convert = await converterFor(
@@ -613,8 +726,8 @@ export function apiRouter(): Router {
       currency,
       month,
       ...(by === 'service'
-        ? { services: totalsByServiceCategory(lineItems, convert, tracker) }
-        : { categories: totalsByCategory(lineItems, convert, tracker) }),
+        ? { services: totalsByServiceCategory(lineItems, convert, tracker, { dropZeroTotals }) }
+        : { categories: totalsByCategory(lineItems, convert, tracker, { dropZeroTotals }) }),
       conversion: tracker.meta(),
     });
   });
@@ -1042,6 +1155,7 @@ export function apiRouter(): Router {
     const total = current.reduce((sum, c) => sum + c.converted_value, 0);
     const previousTotal = previous.reduce((sum, c) => sum + c.converted_value, 0);
     const byMonth = totalsByMonth(current);
+    const reportDropZeroTotals = (await getOrg(orgId))?.zero_charge_mode !== 'show';
 
     res.json({
       currency,
@@ -1058,7 +1172,9 @@ export function apiRouter(): Router {
         label: shortMonthLabel(m),
         total_minor: byMonth.get(m)?.total_minor ?? 0,
       })),
-      services: totalsByService(current).map((row) => ({
+      services: totalsByService(current, {
+        dropZeroTotals: reportDropZeroTotals,
+      }).map((row) => ({
         service: row.service,
         total_minor: row.total_minor,
         invoice_count: row.invoice_count,
@@ -1067,7 +1183,9 @@ export function apiRouter(): Router {
           totalsByService(previous).find((p) => p.service === row.service)?.total_minor ?? 0,
         ),
       })),
-      categories: totalsByCategory(lineItems, convert, tracker),
+      categories: totalsByCategory(lineItems, convert, tracker, {
+        dropZeroTotals: reportDropZeroTotals,
+      }),
       available_periods: available,
       conversion: tracker.meta(),
     });
@@ -1085,6 +1203,7 @@ export function apiRouter(): Router {
     default_currency: currencySchema.nullable().optional(),
     fiscal_year_start_month: z.number().int().min(1).max(12).optional(),
     department_mode: z.enum(['single', 'multi']).optional(),
+    zero_charge_mode: z.enum(['show', 'hide']).optional(),
   });
 
   router.patch('/settings', async (req, res) => {

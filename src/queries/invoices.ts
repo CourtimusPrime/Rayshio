@@ -3,6 +3,7 @@ import { db } from '../db/client.js';
 import { effectiveCategory } from './category-rules.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
 import { displayName } from './service-name.js';
+import { keepsZeroCharges } from './zero-charges.js';
 
 /** Column order here is load-bearing: it is the MCP `list_invoices` wire shape. */
 export interface InvoiceListRow {
@@ -33,7 +34,8 @@ function invoiceListQuery(orgId: number, opts: ListInvoicesOptions) {
     .selectFrom('billing.invoices')
     .innerJoin('billing.email', 'billing.email.id', 'billing.invoices.email_id')
     .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
-    .where('billing.invoices.org_id', '=', orgId);
+    .where('billing.invoices.org_id', '=', orgId)
+    .where(keepsZeroCharges(orgId, 'billing.invoices.value'));
 
   // Filters match what the user can see. Someone who renamed a vendor and then
   // filters by that name must get their invoices back — matching the global
@@ -135,7 +137,8 @@ export async function dominantCategories(
       effectiveCategory(orgId, { lineItems: 'li', service: 's' }).as('category'),
     ])
     .where('li.invoice_id', 'in', invoiceIds)
-    .where('i.org_id', '=', orgId);
+    .where('i.org_id', '=', orgId)
+    .where(keepsZeroCharges(orgId, 'li.amount'));
 
   const rows = await db
     .selectFrom(resolved.as('t'))
@@ -201,6 +204,7 @@ export async function getLineItems(orgId: number, invoiceId: number) {
       .select(effectiveCategory(orgId, { lineItems: 'li', service: 's' }).as('category'))
       .where('li.invoice_id', '=', invoiceId)
       .where('i.org_id', '=', orgId)
+      .where(keepsZeroCharges(orgId, 'li.amount'))
       .orderBy('li.id')
       .execute()
   );

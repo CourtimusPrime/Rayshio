@@ -3,6 +3,7 @@ import { type Category, normalizeCategory } from '../categories.js';
 import { db } from '../db/client.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
 import { displayName } from './service-name.js';
+import { keepsZeroCharges } from './zero-charges.js';
 
 export interface SpendByServiceRow {
   currency: string;
@@ -30,7 +31,8 @@ export async function spendByService(
       fn.count('billing.invoices.id').as('invoice_count'),
     ])
     .where('billing.invoices.org_id', '=', orgId)
-    .where('billing.invoices.status', '=', 'parsed');
+    .where('billing.invoices.status', '=', 'parsed')
+    .where(keepsZeroCharges(orgId, 'billing.invoices.value'));
   if (range.dateFrom) q = q.where(dateAtLeast('billing.invoices.invoice_date', range.dateFrom));
   if (range.dateTo) q = q.where(dateAtMost('billing.invoices.invoice_date', range.dateTo));
 
@@ -73,7 +75,8 @@ export async function spendByLineItemDescription(
       fn.count('billing.invoice_line_items.id').as('line_count'),
     ])
     .where('billing.invoices.org_id', '=', orgId)
-    .where('billing.invoices.status', '=', 'parsed');
+    .where('billing.invoices.status', '=', 'parsed')
+    .where(keepsZeroCharges(orgId, 'billing.invoice_line_items.amount'));
   if (range.dateFrom) q = q.where(dateAtLeast('billing.invoices.invoice_date', range.dateFrom));
   if (range.dateTo) q = q.where(dateAtMost('billing.invoices.invoice_date', range.dateTo));
 
@@ -114,7 +117,8 @@ export async function spendByCategory(
       fn.count('billing.invoice_line_items.id').as('line_count'),
     ])
     .where('billing.invoices.org_id', '=', orgId)
-    .where('billing.invoices.status', '=', 'parsed');
+    .where('billing.invoices.status', '=', 'parsed')
+    .where(keepsZeroCharges(orgId, 'billing.invoice_line_items.amount'));
   if (range.dateFrom) q = q.where(dateAtLeast('billing.invoices.invoice_date', range.dateFrom));
   if (range.dateTo) q = q.where(dateAtMost('billing.invoices.invoice_date', range.dateTo));
 

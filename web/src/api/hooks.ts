@@ -11,6 +11,7 @@ import type {
   ReportResponse,
   ServiceCategoriesResponse,
   ServiceDetail,
+  ZeroChargeMode,
   ServicesResponse,
   Summary,
 } from '../types';
@@ -201,6 +202,42 @@ export function useSetLineItemCategory() {
   });
 }
 
+/**
+ * Files a whole breakdown cell: one rule per line text, or one for the vendor.
+ *
+ * A cell is a (vendor x category) intersection covering however many distinct
+ * line texts, so `descriptions` is a list rather than a single value — passing
+ * only the two the row's note happens to name would leave the rest behind.
+ * `null` writes the vendor-wide rule instead.
+ */
+export function useSetCellCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      service,
+      descriptions,
+      category,
+    }: {
+      service: string;
+      descriptions: string[] | null;
+      category: string | null;
+    }) =>
+      category === null
+        ? apiSend<unknown>(
+            'DELETE',
+            `/category-rules?service=${encodeURIComponent(service)}${
+              descriptions === null
+                ? ''
+                : `&descriptions=${encodeURIComponent(descriptions.join('\n'))}`
+            }`,
+          )
+        : apiSend<unknown>('PUT', '/category-rules', { service, descriptions, category }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+    },
+  });
+}
+
 export function useService(name: string | null) {
   return useQuery({
     queryKey: ['service', name],
@@ -363,6 +400,7 @@ export function useSetOrgSettings() {
       default_currency?: string | null;
       fiscal_year_start_month?: number;
       department_mode?: DepartmentMode;
+      zero_charge_mode?: ZeroChargeMode;
     }) => apiSend<typeof input>('PATCH', '/settings', input),
     /*
      * `void`, not `return`. react-query awaits a promise returned from

@@ -121,7 +121,7 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
   const panelRef = useRef<HTMLElement>(null);
   const prefs = useMotionPrefs();
   /** Which line item's category picker is open, if any. */
-  const [picking, setPicking] = useState<number | null>(null);
+  const [picking, setPicking] = useState<{ id: number; anchor: DOMRect } | null>(null);
 
   const { x, opacity, scrimOpacity, dragging, isPresent, handlers } = useSwipeDrawer({
     panelRef,
@@ -233,13 +233,14 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
                       <button
                         type="button"
                         aria-haspopup="dialog"
-                        aria-expanded={picking === item.id}
+                        aria-expanded={picking?.id === item.id}
                         onClick={(event) => {
                           // The picker closes on any outside click; without this
                           // the click that opens it is itself an outside click
                           // at the moment the listener attaches.
                           event.stopPropagation();
-                          setPicking(picking === item.id ? null : item.id);
+                          const anchor = event.currentTarget.getBoundingClientRect();
+                          setPicking(picking?.id === item.id ? null : { id: item.id, anchor });
                         }}
                         className="press-row flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors hover:bg-canvas"
                       >
@@ -267,12 +268,13 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
                       </button>
 
                       <AnimatePresence>
-                        {picking === item.id && (
+                        {picking?.id === item.id && (
                           <CategoryPicker
                             lineItemId={item.id}
                             description={item.description}
                             service={data.service}
                             current={item.category}
+                            anchor={picking.anchor}
                             onClose={() => setPicking(null)}
                           />
                         )}

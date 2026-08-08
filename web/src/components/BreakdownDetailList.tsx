@@ -9,6 +9,8 @@ import type { Category, ConversionMeta } from '../types';
 import { formatCurrency } from '../utils/format';
 import { AnimatedCurrency } from './AnimatedNumber';
 import { ConversionNote } from './ConversionNote';
+import { CategoryIcon } from './CategoryIcon';
+import { CategoryPicker } from './CategoryPicker';
 import { ServiceLogo } from './ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingLines } from './states';
 
@@ -33,23 +35,51 @@ export type BreakdownMode = 'category' | 'service';
 interface Row {
   key: string;
   label: string;
-  /** The colour rail or vendor logo that identifies the row. */
+  /** The tinted category icon or vendor logo that identifies the row. */
   mark: ReactNode;
   total_minor: number;
   note?: string;
+  /**
+   * What a child row needs to be re-filed: the vendor it belongs to, the
+   * category it currently sits in, and every line text it covers.
+   *
+   * Carried on the row because which of the two is the vendor depends on the
+   * nesting — the Category tab puts services underneath, the Service tab puts
+   * categories — and the picker should not have to know which tab it is in.
+   */
+  cell?: { service: string; category: Category; descriptions: string[] };
 }
 
 interface Group extends Row {
   children: Row[];
 }
 
+/**
+ * A category's mark: its Lucide icon, tinted by the category colour on a wash of
+ * the same hue.
+ *
+ * Replaces a bare colour rail. The rail carried the colour and nothing else, so
+ * every row looked identical until you read its label — and with twenty-one
+ * categories ramped within four parent groups, neighbouring shades are close
+ * enough that the rail stopped distinguishing them at all. The icon is the part
+ * a reader recognises before the text; the tint still carries the grouping.
+ *
+ * Same treatment as the invoice drawer's line items, so a category looks the
+ * same wherever it appears.
+ */
 function categoryMark(category: Category) {
   return (
     <span
-      className="h-8 w-1.5 shrink-0 rounded-full"
-      style={{ backgroundColor: categoryColors[category] }}
-      aria-hidden="true"
-    />
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+      style={{
+        // 0x26 ~ 15% — enough to read as a tint of the icon's own colour
+        // without competing with the surface behind it.
+        backgroundColor: `${categoryColors[category]}26`,
+        color: categoryColors[category],
+      }}
+    >
+      <CategoryIcon category={category} className="h-4 w-4" />
+    </span>
   );
 }
 
@@ -79,6 +109,7 @@ export function BreakdownDetailList({ mode }: { mode: BreakdownMode }) {
             mark: <ServiceLogo name={s.service} />,
             total_minor: s.total_minor,
             note: s.note,
+            cell: { service: s.service, category: c.category, descriptions: s.descriptions },
           })),
         }))
       : (serviceQuery.data?.services ?? []).map((s) => ({
@@ -92,11 +123,14 @@ export function BreakdownDetailList({ mode }: { mode: BreakdownMode }) {
             mark: categoryMark(c.category),
             total_minor: c.total_minor,
             note: c.note,
+            cell: { service: s.service, category: c.category, descriptions: c.descriptions },
           })),
         }));
 
   const total = groups.reduce((sum, item) => sum + item.total_minor, 0);
   const [open, setOpen] = useState<string[]>([]);
+  /** Which sub-item's category picker is open, keyed `group/child`. */
+  const [picking, setPicking] = useState<{ key: string; anchor: DOMRect } | null>(null);
 
   const toggle = (key: string) =>
     setOpen((current) =>
@@ -209,8 +243,29 @@ export function BreakdownDetailList({ mode }: { mode: BreakdownMode }) {
                       >
                         <ul className="border-t border-line bg-canvas px-5 py-2 md:px-6">
                           {group.children.map((child) => (
-                            <li key={child.key} className="flex items-center gap-3 py-2.5">
+                            <li key={child.key} className="relative flex items-center gap-3 py-2.5">
                               {child.mark}
+                              {/*
+                                The whole sub-item is the target, minus its mark.
+                                On the Category tab that mark is a vendor logo —
+                                already a button that opens the vendor editor —
+                                so it stays a sibling rather than being nested
+                                inside this one.
+                              */}
+                              <button
+                                type="button"
+                                aria-haspopup="dialog"
+                                aria-expanded={picking?.key === `${group.key}/${child.key}`}
+                                onClick={(event) => {
+                                  // the picker closes on any outside click, and
+                                  // this click would otherwise count as one
+                                  event.stopPropagation();
+                                  const key = `${group.key}/${child.key}`;
+                                  const anchor = event.currentTarget.getBoundingClientRect();
+                                  setPicking(picking?.key === key ? null : { key, anchor });
+                                }}
+                                className="press-row flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-colors hover:bg-surface"
+                              >
                               <span className="min-w-0">
                                 <span className="block text-footnote text-ink-900">
                                   {child.label}
@@ -249,6 +304,20 @@ export function BreakdownDetailList({ mode }: { mode: BreakdownMode }) {
                                   {formatCurrency(child.total_minor, currency ?? 'USD')}
                                 </span>
                               </span>
+                              </button>
+
+                              <AnimatePresence>
+                                {picking?.key === `${group.key}/${child.key}` && child.cell && (
+                                  <CategoryPicker
+                                    service={child.cell.service}
+                                    descriptions={child.cell.descriptions}
+                                    description={child.note || child.label}
+                                    current={child.cell.category}
+                                    anchor={picking.anchor}
+                                    onClose={() => setPicking(null)}
+                                  />
+                                )}
+                              </AnimatePresence>
                             </li>
                           ))}
                         </ul>

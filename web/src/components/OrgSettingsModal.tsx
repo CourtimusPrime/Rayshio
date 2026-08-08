@@ -8,7 +8,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { useWorkspace } from '../state/workspace';
-import type { DepartmentMode } from '../types';
+import type { DepartmentMode, ZeroChargeMode } from '../types';
 import { ErrorNote } from './states';
 
 const MONTHS = [
@@ -50,6 +50,7 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
   const [currency, setCurrency] = useState<string>('');
   const [fiscalMonth, setFiscalMonth] = useState<number>(1);
   const [mode, setMode] = useState<DepartmentMode>('single');
+  const [zeroMode, setZeroMode] = useState<ZeroChargeMode>('hide');
   const [budget, setBudget] = useState<string>('');
 
   /*
@@ -62,6 +63,7 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
     setCurrency(meta.org.default_currency ?? '');
     setFiscalMonth(meta.fiscal_year_start_month);
     setMode(meta.org.department_mode);
+    setZeroMode(meta.org.zero_charge_mode);
     setBudget(meta.budget ? (meta.budget.monthly_budget_minor / 100).toFixed(2) : '');
     save.reset();
     saveBudget.reset();
@@ -102,6 +104,7 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
     (currency !== (meta.org.default_currency ?? '') ||
       fiscalMonth !== meta.fiscal_year_start_month ||
       mode !== meta.org.department_mode ||
+      zeroMode !== meta.org.zero_charge_mode ||
       budgetChanged);
 
   const saving = save.isPending || saveBudget.isPending;
@@ -122,6 +125,7 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
         ? { fiscal_year_start_month: fiscalMonth }
         : {}),
       ...(mode !== meta.org.department_mode ? { department_mode: mode } : {}),
+      ...(zeroMode !== meta.org.zero_charge_mode ? { zero_charge_mode: zeroMode } : {}),
     };
 
     const pending: Promise<unknown>[] = [];
@@ -329,6 +333,58 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
                     </label>
                   ))}
                 </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-footnote font-medium text-ink-900">Zero charges</legend>
+                <p className="mt-1 text-caption text-ink-500">
+                  A month with no usage still bills 0.00, and vendors itemise free lines.
+                  Hiding them keeps the pages about what you actually pay for.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {(
+                    [
+                      [
+                        'hide',
+                        'Hide zero-charges',
+                        'Omit any invoice or line item charging exactly 0.00.',
+                      ],
+                      [
+                        'show',
+                        'Show everything',
+                        'Include them — useful when reconciling against a vendor\u2019s own statement.',
+                      ],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <label
+                      key={value}
+                      className={`press-row flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                        zeroMode === value
+                          ? 'border-accent bg-accent-soft'
+                          : 'border-line hover:bg-canvas'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="zero-charge-mode"
+                        value={value}
+                        checked={zeroMode === value}
+                        onChange={() => setZeroMode(value)}
+                        className="mt-0.5"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-body text-ink-900">{label}</span>
+                        <span className="mt-0.5 block text-caption text-ink-500">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {/* Credit notes are the reason this says "exactly": a negative
+                    line is a real document with a real effect on spend, and it
+                    is never hidden by either setting. */}
+                <p className="mt-2 text-caption text-ink-400">
+                  Refunds and credit notes are negative, not zero, so they are always shown.
+                </p>
               </fieldset>
 
               {mode === 'multi' && meta?.org.department_mode === 'single' && (

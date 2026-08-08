@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import { db } from '../db/client.js';
 import { dateAtLeast } from './filters.js';
 import { displayName } from './service-name.js';
+import { keepsZeroCharges } from './zero-charges.js';
 
 export interface ProjectedInvoice {
   id: string;
@@ -59,6 +60,7 @@ export async function projectInvoices(
     ])
     .where('billing.invoices.org_id', '=', orgId)
     .where('billing.invoices.status', '=', 'parsed')
+    .where(keepsZeroCharges(orgId, 'billing.invoices.value'))
     .where('billing.invoices.currency', '=', currency)
     .where('billing.invoices.invoice_date', 'is not', null)
     .where(dateAtLeast('billing.invoices.invoice_date', historyFrom))

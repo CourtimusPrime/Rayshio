@@ -95,7 +95,10 @@ export interface ServiceTotal {
   invoice_count: number;
 }
 
-export function totalsByService(invoices: ConvertedInvoice[]): ServiceTotal[] {
+export function totalsByService(
+  invoices: ConvertedInvoice[],
+  { dropZeroTotals = false }: { dropZeroTotals?: boolean } = {},
+): ServiceTotal[] {
   const map = new Map<string, ServiceTotal>();
   for (const inv of invoices) {
     const e = map.get(inv.service) ?? { service: inv.service, total_minor: 0, invoice_count: 0 };
@@ -103,7 +106,11 @@ export function totalsByService(invoices: ConvertedInvoice[]): ServiceTotal[] {
     e.invoice_count += 1;
     map.set(inv.service, e);
   }
-  return [...map.values()].sort((a, b) => b.total_minor - a.total_minor);
+  // A vendor whose invoices cancel out is the same empty heading a zero-total
+  // category is, so it goes on the same setting.
+  return [...map.values()]
+    .filter((s) => !dropZeroTotals || s.total_minor !== 0)
+    .sort((a, b) => b.total_minor - a.total_minor);
 }
 
 export interface MonthTotal {
@@ -138,6 +145,17 @@ export interface CategoryContribution {
   service: string;
   total_minor: number;
   note: string;
+  /**
+   * Every distinct line-item text in this cell, not just the two the note
+   * names.
+   *
+   * The note is a summary for reading; this is what a categorisation rule has
+   * to be written against. A cell is a (vendor x category) intersection and can
+   * cover several different lines — "GPT-4 completions" and "Embeddings API"
+   * both land in OpenAI/AI — so re-filing it means one rule per text, and a
+   * truncated list would silently leave the rest behind.
+   */
+  descriptions: string[];
 }
 
 export interface CategoryTotal {
@@ -150,6 +168,8 @@ export interface ServiceContribution {
   category: string;
   total_minor: number;
   note: string;
+  /** See `CategoryContribution.descriptions`. */
+  descriptions: string[];
 }
 
 export interface ServiceCategoryTotal {
@@ -162,6 +182,7 @@ interface GroupNode {
   key: string;
   total_minor: number;
   note: string;
+  descriptions: string[];
 }
 
 /**
@@ -180,7 +201,11 @@ function groupTwoLevel(
   tracker: ConversionTracker,
   outerOf: (li: LineItemFact) => string,
   innerOf: (li: LineItemFact) => string,
+  { dropZeroTotals = false }: { dropZeroTotals?: boolean } = {},
 ): { key: string; total_minor: number; children: GroupNode[] }[] {
+  // `descriptions` is every distinct text, ordered biggest-first; `note` shows
+  // only the leading two. Kept as one Set-backed list rather than two lists so
+  // the note can never name a description the rule list does not contain.
   const tree = new Map<string, Map<string, { total: number; descriptions: string[] }>>();
 
   // biggest contributors first so the note names the descriptions that matter
@@ -194,28 +219,43 @@ function groupTwoLevel(
 
     const entry = inner.get(innerOf(li)) ?? { total: 0, descriptions: [] };
     entry.total += minor;
-    if (entry.descriptions.length < 2 && !entry.descriptions.includes(li.description)) {
-      entry.descriptions.push(li.description);
-    }
+    if (!entry.descriptions.includes(li.description)) entry.descriptions.push(li.description);
     inner.set(innerOf(li), entry);
   }
 
-  return [...tree.entries()]
-    .map(([key, inner]) => {
-      const children = [...inner.entries()]
-        .map(([childKey, e]) => ({
-          key: childKey,
-          total_minor: e.total,
-          note: e.descriptions.join(' · '),
-        }))
-        .sort((a, b) => b.total_minor - a.total_minor);
-      return {
-        key,
-        total_minor: children.reduce((s, c) => s + c.total_minor, 0),
-        children,
-      };
-    })
-    .sort((a, b) => b.total_minor - a.total_minor);
+  return (
+    [...tree.entries()]
+      .map(([key, inner]) => {
+        const children = [...inner.entries()]
+          .map(([childKey, e]) => ({
+            key: childKey,
+            total_minor: e.total,
+            // the two biggest, which is what the row has space for
+            note: e.descriptions.slice(0, 2).join(' · '),
+            descriptions: e.descriptions,
+          }))
+          .sort((a, b) => b.total_minor - a.total_minor);
+        return {
+          key,
+          total_minor: children.reduce((s, c) => s + c.total_minor, 0),
+          children: dropZeroTotals ? children.filter((c) => c.total_minor !== 0) : children,
+        };
+      })
+      /*
+       * Groups summing to nothing go too, when asked.
+       *
+       * Row-level filtering does not catch these: a category holding a +500
+       * charge and its -500 credit has two perfectly non-zero rows and a total of
+       * 0.00. It is exactly the clutter the setting exists to remove — a heading
+       * and a percentage that say nothing — so the group is dropped after its
+       * total is known, not before.
+       *
+       * The total itself is still summed over every child, including any zero
+       * ones, so the figure never depends on what is being displayed.
+       */
+      .filter((node) => !dropZeroTotals || node.total_minor !== 0)
+      .sort((a, b) => b.total_minor - a.total_minor)
+  );
 }
 
 /** Categories, each broken down by the services that contribute to it. */
@@ -223,6 +263,7 @@ export function totalsByCategory(
   lineItems: LineItemFact[],
   convert: Converter,
   tracker: ConversionTracker,
+  opts: { dropZeroTotals?: boolean } = {},
 ): CategoryTotal[] {
   return groupTwoLevel(
     lineItems,
@@ -230,6 +271,7 @@ export function totalsByCategory(
     tracker,
     (li) => normalizeCategory(li.category),
     (li) => li.service,
+    opts,
   ).map((node) => ({
     category: node.key,
     total_minor: node.total_minor,
@@ -237,6 +279,7 @@ export function totalsByCategory(
       service: c.key,
       total_minor: c.total_minor,
       note: c.note,
+      descriptions: c.descriptions,
     })),
   }));
 }
@@ -252,6 +295,7 @@ export function totalsByServiceCategory(
   lineItems: LineItemFact[],
   convert: Converter,
   tracker: ConversionTracker,
+  opts: { dropZeroTotals?: boolean } = {},
 ): ServiceCategoryTotal[] {
   return groupTwoLevel(
     lineItems,
@@ -259,6 +303,7 @@ export function totalsByServiceCategory(
     tracker,
     (li) => li.service,
     (li) => normalizeCategory(li.category),
+    opts,
   ).map((node) => ({
     service: node.key,
     total_minor: node.total_minor,
@@ -266,6 +311,7 @@ export function totalsByServiceCategory(
       category: c.key,
       total_minor: c.total_minor,
       note: c.note,
+      descriptions: c.descriptions,
     })),
   }));
 }

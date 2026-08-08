@@ -3,6 +3,7 @@ import { db } from '../db/client.js';
 import { effectiveCategory } from './category-rules.js';
 import type { DateRange } from './filters.js';
 import { displayName } from './service-name.js';
+import { keepsZeroCharges } from './zero-charges.js';
 
 /**
  * Row-level facts for the dashboard.
@@ -52,7 +53,8 @@ export async function invoiceFacts(
       sql<string | null>`to_char(billing.invoices.invoice_date, 'YYYY-MM-DD')`.as('invoice_date'),
       EFFECTIVE_DATE.as('effective_date'),
     ])
-    .where('billing.invoices.org_id', '=', orgId);
+    .where('billing.invoices.org_id', '=', orgId)
+    .where(keepsZeroCharges(orgId, 'billing.invoices.value'));
   if (parsedOnly) q = q.where('billing.invoices.status', '=', 'parsed');
   if (range.dateFrom) q = q.where(effectiveAtLeast(range.dateFrom));
   if (range.dateTo) q = q.where(effectiveAtMost(range.dateTo));
@@ -98,7 +100,8 @@ export async function lineItemFacts(orgId: number, range: DateRange = {}): Promi
       EFFECTIVE_DATE.as('effective_date'),
     ])
     .where('billing.invoices.org_id', '=', orgId)
-    .where('billing.invoices.status', '=', 'parsed');
+    .where('billing.invoices.status', '=', 'parsed')
+    .where(keepsZeroCharges(orgId, 'billing.invoice_line_items.amount'));
   if (range.dateFrom) q = q.where(effectiveAtLeast(range.dateFrom));
   if (range.dateTo) q = q.where(effectiveAtMost(range.dateTo));
 

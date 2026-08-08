@@ -102,10 +102,22 @@ export function ServiceLogo({
    * nothing change — the file stored, served by the API, and never asked for.
    */
   const hasCustomLogo = editor?.customLogos.has(name) ?? false;
-  const lobeIcon = hasCustomLogo ? undefined : lobeIconFor(name);
+
+  /*
+   * Marks resolve from the *discovered* vendor name, not what this org renamed
+   * it to. Renaming "Google Cloud Platform" to "GCP" would otherwise miss the
+   * icon set's key and drop the brand mark — the label changing and taking the
+   * logo with it, which is never what a rename meant.
+   *
+   * The monogram's letters still come from the displayed name (they are text,
+   * and should read as the thing on screen), but its tint comes from the
+   * discovered one so the colour does not jump when a vendor is renamed.
+   */
+  const canonical = editor?.canonicalNames[name] ?? name;
+  const lobeIcon = hasCustomLogo ? undefined : lobeIconFor(canonical);
   // tier 1 needs no lookup, so only ask the server about the vendors it misses
   const logo = useServiceLogo(name, allowFetch && lobeIcon === undefined);
-  const brand = brandFor(name);
+  const brand = brandFor(canonical);
 
   const shell = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ${frame}`;
 

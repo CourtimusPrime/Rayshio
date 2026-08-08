@@ -157,3 +157,68 @@ export async function rulesForLineItem(
     }))
     .sort((a, b) => (a.scope === 'item' ? -1 : b.scope === 'item' ? 1 : 0));
 }
+
+/**
+ * Writes one rule per description, or a single vendor-wide rule.
+ *
+ * The Breakdown page's sub-items are (vendor x category) cells, not rows, and a
+ * cell can cover several different line texts — OpenAI's AI cell holds both
+ * "GPT-4 completions" and "Embeddings API". Re-filing what the user sees as one
+ * row therefore means one rule per text, in one transaction, so the cell cannot
+ * end up half moved.
+ *
+ * `descriptions: null` writes the vendor-wide rule instead.
+ */
+export async function setCategoryRules(
+  orgId: number,
+  serviceId: number,
+  descriptions: string[] | null,
+  category: string,
+): Promise<number> {
+  const targets: (string | null)[] = descriptions === null ? [null] : [...new Set(descriptions)];
+  if (targets.length === 0) return 0;
+
+  await db.transaction().execute(async (trx) => {
+    for (const description of targets) {
+      let del = trx
+        .deleteFrom('client.category_rule')
+        .where('org_id', '=', orgId)
+        .where('service_id', '=', serviceId);
+      del =
+        description === null
+          ? del.where('description', 'is', null)
+          : del.where('description', '=', description);
+      await del.execute();
+
+      await trx
+        .insertInto('client.category_rule')
+        .values({
+          org_id: orgId,
+          service_id: serviceId,
+          description,
+          category,
+          updated_at: new Date(),
+        })
+        .execute();
+    }
+  });
+  return targets.length;
+}
+
+/** Clears rules for a set of descriptions, or the vendor-wide one. */
+export async function deleteCategoryRules(
+  orgId: number,
+  serviceId: number,
+  descriptions: string[] | null,
+): Promise<number> {
+  let q = db
+    .deleteFrom('client.category_rule')
+    .where('org_id', '=', orgId)
+    .where('service_id', '=', serviceId);
+  q =
+    descriptions === null
+      ? q.where('description', 'is', null)
+      : q.where('description', 'in', [...new Set(descriptions)]);
+  const result = await q.executeTakeFirst();
+  return Number(result.numDeletedRows);
+}

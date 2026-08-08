@@ -107,6 +107,34 @@ export async function customLogoServices(orgId: number): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
+/**
+ * Vendors this org has renamed, as displayed-name -> discovered-name.
+ *
+ * The client needs it because `ServiceLogo`'s first tier resolves a build-time
+ * brand mark from the vendor name without asking the server. Rename "Google
+ * Cloud Platform" to "GCP" and that lookup misses, so the mark disappears — a
+ * labelling change quietly taking the logo with it. Resolving the mark from the
+ * discovered name keeps it.
+ *
+ * Only renamed vendors are listed; an org that has renamed nothing sends an
+ * empty object.
+ */
+export async function renamedServices(orgId: number): Promise<Record<string, string>> {
+  const rows = await db
+    .selectFrom('client.service_override as so')
+    .innerJoin('server.service', 'server.service.id', 'so.service_id')
+    .select(['so.display_name as displayName', 'server.service.name as canonicalName'])
+    .where('so.org_id', '=', orgId)
+    .where('so.display_name', 'is not', null)
+    .execute();
+
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.displayName) out[row.displayName] = row.canonicalName;
+  }
+  return out;
+}
+
 /** This org's stored corrections for one service, if any. */
 export async function serviceOverrideFor(orgId: number, serviceId: number) {
   return db

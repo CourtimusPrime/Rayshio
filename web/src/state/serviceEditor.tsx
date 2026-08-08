@@ -24,6 +24,13 @@ interface ServiceEditorValue {
    * the icon set covers would be stored, served, and never seen.
    */
   customLogos: Set<string>;
+  /**
+   * Displayed name -> discovered name, for vendors this org renamed.
+   *
+   * A rename is a labelling decision and says nothing about whose mark belongs
+   * on the row, so the logo is resolved from the discovered name.
+   */
+  canonicalNames: Record<string, string>;
 }
 
 const ServiceEditorContext = createContext<ServiceEditorValue | null>(null);
@@ -37,9 +44,17 @@ export function ServiceEditorProvider({ children }: { children: ReactNode }) {
     [meta?.custom_logo_services],
   );
 
+  // Memoised, or the `?? {}` fallback would be a fresh object every render and
+  // the context value below would change identity on each one — re-rendering
+  // every ServiceLogo in the app for nothing.
+  const canonicalNames = useMemo(
+    () => meta?.renamed_services ?? {},
+    [meta?.renamed_services],
+  );
+
   const value = useMemo<ServiceEditorValue>(
-    () => ({ open: setEditing, customLogos }),
-    [customLogos],
+    () => ({ open: setEditing, customLogos, canonicalNames }),
+    [customLogos, canonicalNames],
   );
 
   return (

@@ -47,8 +47,31 @@ Two consequences worth knowing before you run anything:
 
 ### Added
 
+- **Zero-charge display setting** — "Hide zero-charges" (the default) or "Show
+  everything", in workspace settings. A month with no usage still bills 0.00 and
+  vendors itemise free lines; none of it says anything about what the company
+  pays for.
+
+  Two filters, because one cannot do it. Rows charging exactly 0 are dropped in
+  the query layer, which every screen is built from. Groups are dropped after
+  aggregation — a category holding a +500 charge and its -500 credit has two
+  perfectly non-zero rows and a total of nothing, which row-level filtering
+  cannot see.
+
+  **Exactly zero, never `<= 0`.** A negative line is a credit note or refund: a
+  real document with a real effect on spend, and the row it would be most
+  alarming to lose. Totals are summed over everything either way, so hiding
+  rows never moves a figure — asserted, not assumed.
+
+  The setting is read inside the SQL predicate rather than fetched by each route
+  and threaded through, so a query either honours it or does not exist.
+
 - **Recategorize a line item, and it stays recategorized.** Click any item in
-  the invoice drawer to file it under a new category.
+  the invoice drawer to file it under a new category. The sub-items on the
+  Breakdown page work the same way, with one difference: a sub-item is a
+  (vendor x category) cell covering however many distinct line texts, so filing
+  one writes a rule per text in a single transaction — the cell cannot end up
+  half moved.
 
   **The correction is a rule, not an edit to one row.** The same vendor bills
   the same thing every month, so fixing a single line and watching next month's
@@ -208,6 +231,17 @@ Two consequences worth knowing before you run anything:
 
 ### Changed
 
+- **Category marks are the Lucide icon, tinted, not a bare colour rail.** The
+  rail carried colour and nothing else, and with twenty-one categories ramped
+  inside four parent groups neighbouring shades are close enough that it had
+  stopped distinguishing them. The icon is what a reader recognises before the
+  text; the tint still carries the grouping.
+- **Renaming a vendor no longer changes its logo.** Both logo tiers resolved
+  from the vendor *name* — the build-time brand mark by lookup, the favicon
+  through `logoDomainFor` — so renaming "Google Cloud Platform" to "GCP" missed
+  the icon set's key and dropped the mark. A rename is a labelling decision and
+  says nothing about whose mark belongs on the row, so both now resolve from the
+  discovered name, which `/api/meta` reports for renamed vendors.
 - The month stepper is hidden on `/reports`, which selects its own fiscal
   quarter or year. Two period controls in one header is worse than one: the
   chrome's month would keep changing figures the page is not reporting on, and
@@ -215,6 +249,11 @@ Two consequences worth knowing before you run anything:
 
 ### Fixed
 
+- The category picker is portalled and positioned against the viewport. Rendered
+  in place it was fine in the invoice drawer and would have been clipped on the
+  Breakdown page, whose accordion body is `overflow-hidden` for its height
+  animation — an absolutely-positioned popover inside a clipped box is clipped
+  with it.
 - **`GROUP BY` over a correlated subquery.** Both the category rule and the
   vendor-name overlay are correlated subqueries, and grouping by one makes
   Postgres reject the query — "subquery uses ungrouped column". It broke

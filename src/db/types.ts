@@ -194,6 +194,10 @@ export interface ClientOrg {
    */
   monthly_budget_minor: Int8 | null;
   name: string;
+  /**
+   * hide: omit rows charging exactly 0 from lists and breakdowns. show: include them
+   */
+  zero_charge_mode: Generated<string>;
 }
 
 export interface ClientOrgInvitation {

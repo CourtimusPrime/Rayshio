@@ -12,6 +12,7 @@ export async function getOrg(orgId: number) {
       'fiscal_year_start_month',
       'default_currency',
       'department_mode',
+      'zero_charge_mode',
     ])
     .where('id', '=', orgId)
     .executeTakeFirst();
@@ -73,10 +74,21 @@ export async function setFiscalYearStart(orgId: number, startMonth: number): Pro
 
 export type DepartmentMode = 'single' | 'multi';
 
+/**
+ * Whether rows charging exactly nothing are shown.
+ *
+ * `hide` is the default: a real mailbox produces plenty of 0.00 lines and none
+ * of them say anything about what the company pays for. `show` is what you want
+ * when reconciling against a vendor's statement, or checking that a genuine
+ * 0.00 invoice you just uploaded actually arrived.
+ */
+export type ZeroChargeMode = 'show' | 'hide';
+
 export interface OrgSettings {
   default_currency?: string | null;
   fiscal_year_start_month?: number;
   department_mode?: DepartmentMode;
+  zero_charge_mode?: ZeroChargeMode;
 }
 
 /**
@@ -96,6 +108,9 @@ export async function setOrgSettings(orgId: number, settings: OrgSettings): Prom
   }
   if (settings.department_mode !== undefined) {
     patch.department_mode = settings.department_mode;
+  }
+  if (settings.zero_charge_mode !== undefined) {
+    patch.zero_charge_mode = settings.zero_charge_mode;
   }
   if (Object.keys(patch).length === 0) return;
 

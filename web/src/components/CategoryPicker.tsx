@@ -1,7 +1,8 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { CheckIcon, RotateCcwIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useLineItemRules, useSetLineItemCategory } from '../api/hooks';
+import { createPortal } from 'react-dom';
+import { useLineItemRules, useSetCellCategory, useSetLineItemCategory } from '../api/hooks';
 import { categoryColors } from '../categoryColors';
 import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { CATEGORY_META, CATEGORY_PARENTS, type Category, PARENT_LABELS } from '../types';
@@ -25,22 +26,45 @@ type Scope = 'item' | 'vendor';
 
 export function CategoryPicker({
   lineItemId,
+  descriptions,
   description,
   service,
   current,
+  anchor,
   onClose,
 }: {
-  lineItemId: number;
+  /**
+   * Set when filing one line item, from the invoice drawer. Absent for a
+   * breakdown cell, which has no single line-item id — it is an aggregate over
+   * however many rows share that vendor and category.
+   */
+  lineItemId?: number;
+  /** Every line text the target covers. One entry when filing a single item. */
+  descriptions?: string[];
   description: string;
   service: string;
   current: Category;
+  /**
+   * Where the control that opened this sits, in viewport coordinates.
+   *
+   * The picker is portalled and `position: fixed`, so it needs this. Rendering
+   * it in place looked correct in the invoice drawer and was invisible on the
+   * Breakdown page: the accordion body is `overflow-hidden` — it has to be, or
+   * the height animation would spill — and an absolutely-positioned popover
+   * inside a clipped box is clipped with it.
+   */
+  anchor: { top: number; bottom: number; right: number };
   onClose: () => void;
 }) {
   const prefs = useMotionPrefs();
   const panelRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<Scope>('item');
-  const { data: rules } = useLineItemRules(lineItemId);
-  const setCategory = useSetLineItemCategory();
+  const { data: rules } = useLineItemRules(lineItemId ?? null);
+  const setLineItemCategory = useSetLineItemCategory();
+  const setCellCategory = useSetCellCategory();
+  // One of the two, chosen by which target this picker was given. Both expose
+  // the same mutation surface, so everything below reads from one object.
+  const setCategory = lineItemId === undefined ? setCellCategory : setLineItemCategory;
 
   // Escape closes, and a click outside does too — a picker that traps the user
   // is worse than one they dismiss by accident.
@@ -64,24 +88,53 @@ export function CategoryPicker({
   const activeRule = rules?.rules.find((r) => r.scope === scope);
   const classifiedAs = rules?.classified_as;
 
-  function choose(category: Category) {
-    setCategory.mutate({ lineItemId, category, scope }, { onSuccess: onClose });
+  /** What the current scope means for this target, as the API expects it. */
+  function targetDescriptions(): string[] | null {
+    if (scope === 'vendor') return null;
+    return descriptions ?? [description];
   }
 
-  function revert() {
-    setCategory.mutate({ lineItemId, category: null, scope }, { onSuccess: onClose });
+  function apply(category: Category | null) {
+    if (lineItemId === undefined) {
+      setCellCategory.mutate(
+        { service, descriptions: targetDescriptions(), category },
+        { onSuccess: onClose },
+      );
+    } else {
+      setLineItemCategory.mutate({ lineItemId, category, scope }, { onSuccess: onClose });
+    }
   }
 
-  return (
+  const choose = (category: Category) => apply(category);
+  const revert = () => apply(null);
+
+  const host = typeof document === 'undefined' ? null : document.getElementById('overlay-root');
+  if (!host) return null;
+
+  /*
+   * Opens downward unless that would run off the bottom, in which case it flips
+   * above the row. `position: fixed` against the viewport, which is what makes
+   * it immune to the clipped, scrolling containers it is opened from.
+   */
+  const PANEL_HEIGHT = 420;
+  const flipUp = anchor.bottom + PANEL_HEIGHT > window.innerHeight && anchor.top > PANEL_HEIGHT;
+
+  return createPortal(
     <motion.div
       ref={panelRef}
       role="dialog"
       aria-label={`Categorize ${description}`}
+      style={{
+        position: 'fixed',
+        top: flipUp ? undefined : anchor.bottom + 4,
+        bottom: flipUp ? window.innerHeight - anchor.top + 4 : undefined,
+        right: Math.max(12, window.innerWidth - anchor.right),
+      }}
       initial={prefs.pick({ opacity: 0, y: -4, scale: 0.98 }, { opacity: 0 })}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={prefs.pick({ opacity: 0, y: -4, scale: 0.98 }, { opacity: 0 })}
       transition={prefs.spring('quick')}
-      className="material-sheet absolute right-0 z-popover mt-1 w-[19rem] max-w-[calc(100vw-3rem)] overflow-hidden rounded-xl border border-line shadow-e3"
+      className="material-sheet z-popover w-[19rem] max-w-[calc(100vw-3rem)] overflow-hidden rounded-xl border border-line shadow-e3"
     >
       <div className="border-b border-line px-3.5 py-3">
         <p className="truncate text-footnote font-medium text-ink-900">{description}</p>
@@ -176,21 +229,7 @@ export function CategoryPicker({
           </button>
         </div>
       )}
-    </motion.div>
-  );
-}
-
-/** Wrapper that positions the picker and handles its mount/unmount animation. */
-export function CategoryPickerAnchor({
-  open,
-  children,
-}: {
-  open: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <span className="relative">
-      <AnimatePresence>{open && children}</AnimatePresence>
-    </span>
+    </motion.div>,
+    host,
   );
 }

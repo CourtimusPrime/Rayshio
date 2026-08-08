@@ -54,6 +54,9 @@ export const CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 
 export type DepartmentMode = 'single' | 'multi';
 
+/** Whether rows charging exactly nothing are shown. Mirrors `src/queries/meta.ts`. */
+export type ZeroChargeMode = 'show' | 'hide';
+
 export interface Meta {
   org: {
     id: number;
@@ -61,6 +64,8 @@ export interface Meta {
     /** Display currency the workspace opens on; null falls back to the busiest. */
     default_currency: string | null;
     department_mode: DepartmentMode;
+    /** 'hide' omits rows charging exactly 0 from every list and breakdown. */
+    zero_charge_mode: ZeroChargeMode;
   };
   account: { email_address: string; provider: string; status: string } | null;
   currencies: string[];
@@ -80,6 +85,14 @@ export interface Meta {
    * do nothing.
    */
   custom_logo_services: string[];
+  /**
+   * Renamed vendors, displayed name -> discovered name.
+   *
+   * `ServiceLogo` resolves its build-time brand mark from the vendor name
+   * without asking the server, so renaming a vendor would otherwise lose the
+   * mark — a labelling change quietly taking the logo with it.
+   */
+  renamed_services: Record<string, string>;
 }
 
 /** What the picker needs to show: the classifier's answer, and any rules over it. */
@@ -157,6 +170,12 @@ export interface CategoryContribution {
   service: string;
   total_minor: number;
   note: string;
+  /**
+   * Every distinct line text in this cell, not just the two the note names.
+   * Re-filing the cell writes one rule per text, so a truncated list would
+   * silently leave the rest behind.
+   */
+  descriptions: string[];
 }
 
 export interface CategoryBreakdown {
@@ -177,6 +196,8 @@ export interface ServiceContribution {
   category: Category;
   total_minor: number;
   note: string;
+  /** See `CategoryContribution.descriptions`. */
+  descriptions: string[];
 }
 
 export interface ServiceBreakdown {
