@@ -146,12 +146,42 @@ export interface CategoryTotal {
   services: CategoryContribution[];
 }
 
-export function totalsByCategory(
+export interface ServiceContribution {
+  category: string;
+  total_minor: number;
+  note: string;
+}
+
+export interface ServiceCategoryTotal {
+  service: string;
+  total_minor: number;
+  categories: ServiceContribution[];
+}
+
+interface GroupNode {
+  key: string;
+  total_minor: number;
+  note: string;
+}
+
+/**
+ * Line items summed into a two-level tree, both levels sorted by size.
+ *
+ * "Cost of each service within each category" and "cost of each category within
+ * each service" are the same operation with the two keys exchanged, over the
+ * same rows and the same conversion — so they are one function taking the key
+ * extractors, not two implementations that have to be kept agreeing about
+ * rounding, sort order and how notes are built. The dimension names are put
+ * back on at the edges, where the wire shape wants them.
+ */
+function groupTwoLevel(
   lineItems: LineItemFact[],
   convert: Converter,
   tracker: ConversionTracker,
-): CategoryTotal[] {
-  const byCategory = new Map<string, Map<string, { total: number; descriptions: string[] }>>();
+  outerOf: (li: LineItemFact) => string,
+  innerOf: (li: LineItemFact) => string,
+): { key: string; total_minor: number; children: GroupNode[] }[] {
+  const tree = new Map<string, Map<string, { total: number; descriptions: string[] }>>();
 
   // biggest contributors first so the note names the descriptions that matter
   const sorted = [...lineItems].sort((a, b) => b.amount - a.amount);
@@ -159,32 +189,83 @@ export function totalsByCategory(
     const { minor, rate } = convert(li.amount, li.currency, li.effective_date);
     tracker.note(li.currency, rate);
 
-    const category = normalizeCategory(li.category);
-    const services = byCategory.get(category) ?? new Map();
-    byCategory.set(category, services);
+    const inner = tree.get(outerOf(li)) ?? new Map();
+    tree.set(outerOf(li), inner);
 
-    const entry = services.get(li.service) ?? { total: 0, descriptions: [] };
+    const entry = inner.get(innerOf(li)) ?? { total: 0, descriptions: [] };
     entry.total += minor;
     if (entry.descriptions.length < 2 && !entry.descriptions.includes(li.description)) {
       entry.descriptions.push(li.description);
     }
-    services.set(li.service, entry);
+    inner.set(innerOf(li), entry);
   }
 
-  return [...byCategory.entries()]
-    .map(([category, services]) => {
-      const contributions = [...services.entries()]
-        .map(([service, e]) => ({
-          service,
+  return [...tree.entries()]
+    .map(([key, inner]) => {
+      const children = [...inner.entries()]
+        .map(([childKey, e]) => ({
+          key: childKey,
           total_minor: e.total,
           note: e.descriptions.join(' · '),
         }))
         .sort((a, b) => b.total_minor - a.total_minor);
       return {
-        category,
-        total_minor: contributions.reduce((s, c) => s + c.total_minor, 0),
-        services: contributions,
+        key,
+        total_minor: children.reduce((s, c) => s + c.total_minor, 0),
+        children,
       };
     })
     .sort((a, b) => b.total_minor - a.total_minor);
+}
+
+/** Categories, each broken down by the services that contribute to it. */
+export function totalsByCategory(
+  lineItems: LineItemFact[],
+  convert: Converter,
+  tracker: ConversionTracker,
+): CategoryTotal[] {
+  return groupTwoLevel(
+    lineItems,
+    convert,
+    tracker,
+    (li) => normalizeCategory(li.category),
+    (li) => li.service,
+  ).map((node) => ({
+    category: node.key,
+    total_minor: node.total_minor,
+    services: node.children.map((c) => ({
+      service: c.key,
+      total_minor: c.total_minor,
+      note: c.note,
+    })),
+  }));
+}
+
+/**
+ * The same spend, pivoted: services, each broken down by category.
+ *
+ * Totals are identical to `totalsByCategory` summed the other way — the same
+ * line items, converted once by the same converter. If the two ever disagree,
+ * the grouping is not the thing that broke.
+ */
+export function totalsByServiceCategory(
+  lineItems: LineItemFact[],
+  convert: Converter,
+  tracker: ConversionTracker,
+): ServiceCategoryTotal[] {
+  return groupTwoLevel(
+    lineItems,
+    convert,
+    tracker,
+    (li) => li.service,
+    (li) => normalizeCategory(li.category),
+  ).map((node) => ({
+    service: node.key,
+    total_minor: node.total_minor,
+    categories: node.children.map((c) => ({
+      category: c.key,
+      total_minor: c.total_minor,
+      note: c.note,
+    })),
+  }));
 }
