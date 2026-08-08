@@ -3,7 +3,23 @@ import { useLogout } from '../api/hooks';
 import { useWorkspace } from '../state/workspace';
 import { longMonthLabel } from '../utils/format';
 
-export function TopBar({ title, scrolled = false }: { title: string; scrolled?: boolean }) {
+export function TopBar({
+  title,
+  scrolled = false,
+  showMonthNav = true,
+}: {
+  title: string;
+  scrolled?: boolean;
+  /**
+   * Whether the month stepper belongs on this page.
+   *
+   * False on Reports, which selects its own fiscal quarter or year. Two period
+   * controls disagreeing in the same header is worse than none: the month in
+   * the chrome would keep changing figures the page is not reporting on, and
+   * there is no reading of the screen that makes both of them right.
+   */
+  showMonthNav?: boolean;
+}) {
   const { meta, currency, setCurrency, currencies, month, setMonth, months } = useWorkspace();
   const logout = useLogout();
 
@@ -33,7 +49,7 @@ export function TopBar({ title, scrolled = false }: { title: string; scrolled?: 
       {/* The period being read, at the far left: it qualifies every figure on
           the page, so it belongs where the eye starts rather than in the
           right-hand cluster of controls. */}
-      {months.length > 1 && (
+      {showMonthNav && months.length > 1 && (
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"

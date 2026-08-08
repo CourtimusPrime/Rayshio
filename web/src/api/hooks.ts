@@ -5,6 +5,7 @@ import type {
   DepartmentMode,
   InvoiceDetail,
   InvoicesResponse,
+  LineItemRules,
   Meta,
   PeriodType,
   ReportResponse,
@@ -154,6 +155,49 @@ export function useServiceCategories(currency: string | undefined, month: string
     staleTime: PERIOD_STALE_TIME,
     enabled: Boolean(currency),
     retry: retryUnlessUnauthorized,
+  });
+}
+
+/** Which rules currently apply to a line item, and what the classifier said. */
+export function useLineItemRules(lineItemId: number | null) {
+  return useQuery({
+    queryKey: ['line-item-rules', lineItemId],
+    queryFn: () => apiGet<LineItemRules>(`/line-items/${lineItemId}/category`),
+    enabled: lineItemId !== null,
+    retry: retryUnlessUnauthorized,
+  });
+}
+
+/**
+ * Files a line item — by writing a rule, not by editing the row.
+ *
+ * `category: null` removes the rule at that scope instead, restoring whatever
+ * the classifier originally read off the invoice.
+ *
+ * Invalidates everything. A rule re-files every matching line item across every
+ * month, so the categories on the breakdown, the dominant category on each
+ * invoice row, the charts and the reports all move at once — enumerating those
+ * keys is a list that goes stale, and being wrong leaves a screen showing the
+ * category the user just corrected.
+ */
+export function useSetLineItemCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      lineItemId,
+      category,
+      scope,
+    }: {
+      lineItemId: number;
+      category: string | null;
+      scope: 'item' | 'vendor';
+    }) =>
+      category === null
+        ? apiSend<unknown>('DELETE', `/line-items/${lineItemId}/category?scope=${scope}`)
+        : apiSend<unknown>('PUT', `/line-items/${lineItemId}/category`, { category, scope }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+    },
   });
 }
 

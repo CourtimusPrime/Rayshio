@@ -47,6 +47,40 @@ Two consequences worth knowing before you run anything:
 
 ### Added
 
+- **Recategorize a line item, and it stays recategorized.** Click any item in
+  the invoice drawer to file it under a new category.
+
+  **The correction is a rule, not an edit to one row.** The same vendor bills
+  the same thing every month, so fixing a single line and watching next month's
+  invoice arrive misfiled would make the feature a treadmill. Two levels, and
+  the narrower wins: this vendor's lines with this exact text, or everything
+  from the vendor. Rules default to the narrower one — getting "all Neon is
+  Storage" wrong silently re-files compute lines too.
+
+  Applied at read time, over `client.category_rule`, which buys three things at
+  once: retroactive with no backfill job, applied to invoices ingested later
+  without the pipeline knowing rules exist, and destroying nothing — the
+  classifier's original category stays on the row and returns if the rule is
+  deleted.
+
+- **New category taxonomy** (`dev/CATEGORIES.md`): four parent groups, twenty-one
+  leaves, each with a Lucide mark. The old seven remap losslessly —
+  `compute→computing`, `ai_invocations→ai`, `api_usage→access`,
+  `subscription→subscriptions`, with `storage`, `network` and `other` keeping
+  their slugs precisely so those rows are untouched.
+
+  Two values were added beyond the source list, both deliberately. It had no
+  home for a flat recurring plan (91 line items here), and its "Other" group had
+  a blank second slot — a taxonomy with no escape hatch just pushes discounts
+  and adjustments into whichever category is nearest, quietly.
+
+  The taxonomy now exists in four places — `src/categories.ts`, the client copy
+  in `web/src/types.ts`, the LLM enum, and a CHECK constraint — because the
+  client cannot import from `src/`. `test/unit/categories.test.ts` asserts all
+  four agree, since every drift fails silently: a category the model returns
+  that the schema rejects, or one the schema accepts and the database refuses at
+  write time, failing an invoice that parsed perfectly.
+
 - **ServiceModal** — rename a vendor and replace its logo, from any vendor logo
   in the signed-in app.
 
@@ -172,8 +206,22 @@ Two consequences worth knowing before you run anything:
 - `CategoryDetailList` replaced by `BreakdownDetailList`, which renders either
   nesting rather than being duplicated for the second one.
 
+### Changed
+
+- The month stepper is hidden on `/reports`, which selects its own fiscal
+  quarter or year. Two period controls in one header is worse than one: the
+  chrome's month would keep changing figures the page is not reporting on, and
+  no reading of the screen makes both of them right.
+
 ### Fixed
 
+- **`GROUP BY` over a correlated subquery.** Both the category rule and the
+  vendor-name overlay are correlated subqueries, and grouping by one makes
+  Postgres reject the query — "subquery uses ungrouped column". It broke
+  `/api/invoices` outright. `dominantCategories` now resolves in a derived table
+  and aggregates outside it; adding the referenced columns to the `GROUP BY`
+  instead would have split the sum per line-item description, which is not what
+  a dominant category means.
 - The puff spinner flickered its border once per cycle: animating opacity
   `0.75 → 0` on repeat restarts by snapping back to `0.75`, painting one frame
   of a fully opaque ring at its smallest. Now `[0, 0.75, 0]`, so start and end

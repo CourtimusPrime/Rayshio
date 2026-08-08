@@ -152,7 +152,12 @@ function Shell() {
         {/* 1px so it has a real box for the observer, negative-margined back so
             it costs no layout and leaves no strip above the bar */}
         <div ref={sentinel} aria-hidden="true" className="-mb-px h-px shrink-0" />
-        <TopBar title={APP_TITLES[pathname] ?? 'Dashboard'} scrolled={!atTop} />
+        <TopBar
+          title={APP_TITLES[pathname] ?? 'Dashboard'}
+          scrolled={!atTop}
+          /* Reports drives its own fiscal period; see TopBar. */
+          showMonthNav={pathname !== '/reports'}
+        />
         <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-6 md:px-8 md:py-8">
           {/*
             The fallback traces the arriving page's own layout rather than

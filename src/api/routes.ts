@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import express, { type Request, Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/context.js';
-import { normalizeCategory } from '../categories.js';
+import { CATEGORIES, normalizeCategory } from '../categories.js';
 import { config } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
@@ -20,6 +20,12 @@ import {
   deleteUploadedInvoice,
   isUploadedInvoice,
 } from '../pipeline/uploads.js';
+import {
+  deleteCategoryRule,
+  lineItemContext,
+  rulesForLineItem,
+  setCategoryRule,
+} from '../queries/category-rules.js';
 import {
   ConversionTracker,
   convertInvoices,
@@ -340,6 +346,92 @@ export function apiRouter(): Router {
     res.setHeader('Cache-Control', 'private, max-age=86400');
     res.json({
       data_url: logo ? `data:${logo.contentType};base64,${logo.data.toString('base64')}` : null,
+    });
+  });
+
+  /**
+   * Recategorize a line item — by writing a rule, not by editing the row.
+   *
+   * `scope: 'item'` files every line from this vendor whose text matches this
+   * one; `scope: 'vendor'` files everything from the vendor. The same vendor
+   * bills the same thing every month, so correcting a single row would leave
+   * next month's invoice misfiled again — the point is to teach, once.
+   *
+   * Nothing is destroyed: the classifier's original category stays on the row
+   * and reappears if the rule is deleted.
+   */
+  router.put('/line-items/:id/category', async (req, res) => {
+    const orgId = orgOf(req);
+    const lineItemId = Number(req.params.id);
+    if (!Number.isInteger(lineItemId)) throw new BadRequest('invalid line item id');
+
+    const body = req.body as { category?: unknown; scope?: unknown };
+    const category = typeof body.category === 'string' ? body.category : '';
+    if (!(CATEGORIES as readonly string[]).includes(category)) {
+      throw new BadRequest(`unknown category '${category}'`);
+    }
+    const scope = body.scope === 'vendor' ? 'vendor' : 'item';
+
+    const context = await lineItemContext(orgId, lineItemId);
+    if (!context) {
+      res.status(404).json({ error: `line item ${lineItemId} not found` });
+      return;
+    }
+
+    await setCategoryRule(
+      orgId,
+      Number(context.serviceId),
+      scope === 'vendor' ? null : context.description,
+      category,
+    );
+    res.json({
+      line_item_id: lineItemId,
+      category,
+      scope,
+      /** What the rule keys on, so the client can say what it just did. */
+      description: scope === 'vendor' ? null : context.description,
+    });
+  });
+
+  /** Drops a rule, restoring the classifier's own answer for the matching items. */
+  router.delete('/line-items/:id/category', async (req, res) => {
+    const orgId = orgOf(req);
+    const lineItemId = Number(req.params.id);
+    if (!Number.isInteger(lineItemId)) throw new BadRequest('invalid line item id');
+    const scope = req.query.scope === 'vendor' ? 'vendor' : 'item';
+
+    const context = await lineItemContext(orgId, lineItemId);
+    if (!context) {
+      res.status(404).json({ error: `line item ${lineItemId} not found` });
+      return;
+    }
+
+    const removed = await deleteCategoryRule(
+      orgId,
+      Number(context.serviceId),
+      scope === 'vendor' ? null : context.description,
+    );
+    res.json({ line_item_id: lineItemId, scope, removed, category: context.storedCategory });
+  });
+
+  /** Which rules currently apply to a line item — shown in the picker. */
+  router.get('/line-items/:id/category', async (req, res) => {
+    const orgId = orgOf(req);
+    const lineItemId = Number(req.params.id);
+    if (!Number.isInteger(lineItemId)) throw new BadRequest('invalid line item id');
+
+    const context = await lineItemContext(orgId, lineItemId);
+    if (!context) {
+      res.status(404).json({ error: `line item ${lineItemId} not found` });
+      return;
+    }
+    const rules = await rulesForLineItem(orgId, Number(context.serviceId), context.description);
+    res.json({
+      line_item_id: lineItemId,
+      description: context.description,
+      /** What the classifier said, before any rule. */
+      classified_as: normalizeCategory(context.storedCategory),
+      rules,
     });
   });
 

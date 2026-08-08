@@ -1,5 +1,6 @@
 import { type Expression, type SqlBool, sql } from 'kysely';
 import { db } from '../db/client.js';
+import { effectiveCategory } from './category-rules.js';
 import type { DateRange } from './filters.js';
 import { displayName } from './service-name.js';
 
@@ -87,7 +88,10 @@ export async function lineItemFacts(orgId: number, range: DateRange = {}): Promi
     .select([
       'billing.invoice_line_items.invoice_id',
       displayName(orgId).as('service'),
-      'billing.invoice_line_items.category',
+      effectiveCategory(orgId, {
+        lineItems: 'billing.invoice_line_items',
+        service: 'server.service',
+      }).as('category'),
       'billing.invoice_line_items.description',
       'billing.invoice_line_items.amount',
       'billing.invoices.currency',

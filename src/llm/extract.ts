@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { CATEGORY_INSTRUCTIONS } from './category-prompt.js';
 import { completeJson } from './openrouter.js';
 import { type Extraction, extractionSchema } from './schemas.js';
 
@@ -30,25 +31,7 @@ Rules:
   never the customer being billed. Use the vendor's plain trading name — "Anthropic",
   not "Anthropic, PBC" or "ANTHROPIC PBC INVOICE". Null if you cannot tell.
 
-Also assign each line item a normalized \`category\` from exactly this set:
-- "compute": CPU/memory/instance/container/serverless execution time.
-- "storage": disks, volumes, object storage, databases, backups, snapshots.
-- "network": bandwidth, egress, data transfer, CDN, load balancing.
-- "api_usage": metered requests, calls, events, observability ingest — consumption
-  that is not compute, storage, network, or model inference.
-- "ai_invocations": LLM/model inference, tokens, embeddings, GPU inference.
-- "subscription": flat recurring plan or per-seat licence fees.
-- "other": tax and VAT, discounts, refunds, adjustments, and nothing else fitting.
-
-Category rules that matter:
-- Categorize what the LINE describes, not what the vendor mainly sells. The point
-  is comparing the same cost type across vendors, so a storage line on a compute
-  vendor's invoice is still "storage".
-- Prepaid credits and account top-ups take the category of what the vendor sells:
-  "OpenRouter Credits" is "ai_invocations", not "other". Only genuine tax,
-  discount, refund and adjustment lines are "other".
-- For an opaque total ("Payment received", "Amount"), infer from the vendor when
-  you can and fall back to "other" only when you cannot.`;
+${CATEGORY_INSTRUCTIONS}`;
 
 export async function extractInvoice(
   invoiceText: string,

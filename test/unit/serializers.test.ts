@@ -35,7 +35,7 @@ describe('normalizeCategory', () => {
 
   it('preserves known categories', () => {
     expect(normalizeCategory('storage')).toBe('storage');
-    expect(normalizeCategory('ai_invocations')).toBe('ai_invocations');
+    expect(normalizeCategory('ai')).toBe('ai');
   });
 
   it('rejects the superseded title-case taxonomy', () => {

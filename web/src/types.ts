@@ -1,13 +1,56 @@
 export type DisplayStatus = 'parsed' | 'pending' | 'failed';
 
-export type Category =
-  | 'compute'
-  | 'storage'
-  | 'api_usage'
-  | 'ai_invocations'
-  | 'network'
-  | 'subscription'
-  | 'other';
+export const CATEGORY_PARENTS = ['technology', 'employee', 'goods', 'other'] as const;
+export type CategoryParent = (typeof CATEGORY_PARENTS)[number];
+
+export const PARENT_LABELS: Record<CategoryParent, string> = {
+  technology: 'Technology',
+  employee: 'Employee Expenses',
+  goods: 'Physical Goods',
+  other: 'Other',
+};
+
+/**
+ * The category taxonomy, mirroring `src/categories.ts`.
+ *
+ * Duplicated across the boundary on purpose: the client cannot import from
+ * `src/`, and shipping the list over the wire would mean the picker could not
+ * render until `/api/meta` resolved. Declaration order is display order, and
+ * both copies must stay in the same order — a chart legend and a picker that
+ * disagree about sequence look like a bug even when every value is present.
+ *
+ * `icon` is a Lucide export name, resolved in `CategoryIcon`.
+ */
+export const CATEGORY_META = {
+  computing: { label: 'Computing', parent: 'technology', icon: 'Cpu' },
+  ai: { label: 'AI', parent: 'technology', icon: 'BrainCircuit' },
+  web_search: { label: 'Web Search', parent: 'technology', icon: 'Globe' },
+  storage: { label: 'Storage', parent: 'technology', icon: 'Database' },
+  domains: { label: 'Domains', parent: 'technology', icon: 'Link' },
+  network: { label: 'Network', parent: 'technology', icon: 'Share2' },
+  access: { label: 'Access', parent: 'technology', icon: 'LockOpen' },
+  authentication: { label: 'Authentication', parent: 'technology', icon: 'Shield' },
+  subscriptions: { label: 'Subscriptions', parent: 'technology', icon: 'CalendarSync' },
+
+  food: { label: 'Food', parent: 'employee', icon: 'Utensils' },
+  transportation: { label: 'Transportation', parent: 'employee', icon: 'CarFront' },
+  flights: { label: 'Flights', parent: 'employee', icon: 'Plane' },
+  accommodation: { label: 'Accommodation', parent: 'employee', icon: 'BedDouble' },
+  reimbursement: { label: 'Reimbursement', parent: 'employee', icon: 'HandCoins' },
+  training: { label: 'Training', parent: 'employee', icon: 'GraduationCap' },
+
+  inventory: { label: 'Inventory', parent: 'goods', icon: 'Boxes' },
+  office_supplies: { label: 'Office Supplies', parent: 'goods', icon: 'NotebookPen' },
+  furniture: { label: 'Furniture', parent: 'goods', icon: 'LampDesk' },
+  equipment: { label: 'Equipment', parent: 'goods', icon: 'Toolbox' },
+
+  taxes_fees: { label: 'Taxes & Fees', parent: 'other', icon: 'Coins' },
+  other: { label: 'Other', parent: 'other', icon: 'CircleDashed' },
+} as const satisfies Record<string, { label: string; parent: CategoryParent; icon: string }>;
+
+export type Category = keyof typeof CATEGORY_META;
+
+export const CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 
 export type DepartmentMode = 'single' | 'multi';
 
@@ -37,6 +80,15 @@ export interface Meta {
    * do nothing.
    */
   custom_logo_services: string[];
+}
+
+/** What the picker needs to show: the classifier's answer, and any rules over it. */
+export interface LineItemRules {
+  line_item_id: number;
+  description: string;
+  /** What the invoice was read as, before any rule. */
+  classified_as: Category;
+  rules: { scope: 'item' | 'vendor'; category: string }[];
 }
 
 /** One vendor as this org sees it — the payload behind ServiceModal. */

@@ -10,6 +10,8 @@ import { useScrollLock } from '../hooks/useScrollLock';
 import { useMotionPrefs } from '../motion/useMotionPrefs';
 import { useSwipeDrawer } from '../motion/useSwipeDrawer';
 import { formatCurrency, formatDate } from '../utils/format';
+import { CategoryIcon } from './CategoryIcon';
+import { CategoryPicker } from './CategoryPicker';
 import { ServiceLogo } from './ServiceLogo';
 import { StatusBadge } from './StatusBadge';
 import { ErrorNote, LoadingLines } from './states';
@@ -118,6 +120,8 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
   const { data, isPending, error } = useInvoice(invoiceId);
   const panelRef = useRef<HTMLElement>(null);
   const prefs = useMotionPrefs();
+  /** Which line item's category picker is open, if any. */
+  const [picking, setPicking] = useState<number | null>(null);
 
   const { x, opacity, scrimOpacity, dragging, isPresent, handlers } = useSwipeDrawer({
     panelRef,
@@ -219,24 +223,60 @@ function DrawerPanel({ invoiceId, onClose }: { invoiceId: number; onClose: () =>
 
               <div>
                 <h3 className="text-body font-medium text-ink-900">Line items</h3>
+                <p className="mt-1 text-caption text-ink-500">
+                  Click an item to change its category. The change is remembered for future
+                  invoices.
+                </p>
                 <ul className="mt-3 divide-y divide-line rounded-xl border border-line">
                   {data.line_items.map((item) => (
-                    <li key={item.id} className="flex items-start gap-3 px-3.5 py-3">
-                      <span
-                        className="mt-0.5 h-8 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: categoryColors[item.category] }}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-footnote text-ink-900">{item.description}</span>
-                        <span className="block text-caption text-ink-400">
-                          {categoryLabel(item.category)}
-                          {item.quantity ? ` · ${item.quantity} ${item.unit ?? ''}` : ''}
+                    <li key={item.id} className="relative">
+                      <button
+                        type="button"
+                        aria-haspopup="dialog"
+                        aria-expanded={picking === item.id}
+                        onClick={(event) => {
+                          // The picker closes on any outside click; without this
+                          // the click that opens it is itself an outside click
+                          // at the moment the listener attaches.
+                          event.stopPropagation();
+                          setPicking(picking === item.id ? null : item.id);
+                        }}
+                        className="press-row flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors hover:bg-canvas"
+                      >
+                        <span
+                          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                          style={{
+                            backgroundColor: `${categoryColors[item.category]}26`,
+                            color: categoryColors[item.category],
+                          }}
+                        >
+                          <CategoryIcon category={item.category} className="h-4 w-4" />
                         </span>
-                      </span>
-                      <span className="tnum text-footnote font-medium text-ink-700">
-                        {formatCurrency(item.amount, data.currency)}
-                      </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-footnote text-ink-900">
+                            {item.description}
+                          </span>
+                          <span className="block text-caption text-ink-400">
+                            {categoryLabel(item.category)}
+                            {item.quantity ? ` · ${item.quantity} ${item.unit ?? ''}` : ''}
+                          </span>
+                        </span>
+                        <span className="tnum text-footnote font-medium text-ink-700">
+                          {formatCurrency(item.amount, data.currency)}
+                        </span>
+                      </button>
+
+                      <AnimatePresence>
+                        {picking === item.id && (
+                          <CategoryPicker
+                            lineItemId={item.id}
+                            description={item.description}
+                            service={data.service}
+                            current={item.category}
+                            onClose={() => setPicking(null)}
+                          />
+                        )}
+                      </AnimatePresence>
                     </li>
                   ))}
                   {data.line_items.length === 0 && (

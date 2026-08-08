@@ -1,19 +1,23 @@
 import { z } from 'zod';
+import { CATEGORIES, type Category } from '../categories.js';
 
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .nullable();
 
-export const CATEGORY_VALUES = [
-  'compute',
-  'storage',
-  'api_usage',
-  'ai_invocations',
-  'network',
-  'subscription',
-  'other',
-] as const;
+/**
+ * Derived from the taxonomy rather than restated.
+ *
+ * These two lists drifting apart is a silent failure: the model would return a
+ * category the schema rejects, or — worse — one the schema accepts and the
+ * database CHECK constraint does not, failing the whole extraction at write
+ * time on an invoice that parsed perfectly.
+ *
+ * `z.enum` needs a non-empty tuple, hence the cast; `CATEGORIES` is a literal
+ * object's keys and is never empty.
+ */
+export const CATEGORY_VALUES = CATEGORIES as unknown as [Category, ...Category[]];
 
 export const lineItemSchema = z.object({
   description: z.string().min(1),

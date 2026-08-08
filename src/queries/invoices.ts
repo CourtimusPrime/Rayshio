@@ -1,5 +1,6 @@
 import { sql } from 'kysely';
 import { db } from '../db/client.js';
+import { effectiveCategory } from './category-rules.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
 import { displayName } from './service-name.js';
 
@@ -112,17 +113,38 @@ export async function dominantCategories(
   // without it a caller holding another tenant's invoice id reads that
   // tenant's spend breakdown. Every column is qualified because the join puts
   // an `id` and a `category`-adjacent name in scope twice.
-  const rows = await db
+  /*
+   * Resolved first, aggregated second — the rule expression cannot appear in a
+   * GROUP BY.
+   *
+   * It is a correlated subquery over the vendor and the line's own text, so
+   * grouping by it makes Postgres reject the query outright ("subquery uses
+   * ungrouped column"), and adding those columns to the GROUP BY instead would
+   * split the sum per description, which is not what "dominant category" means.
+   * A derived table resolves each row's category, then the outer query groups
+   * on a plain column.
+   */
+  const resolved = db
     .selectFrom('billing.invoice_line_items as li')
     .innerJoin('billing.invoices as i', 'i.id', 'li.invoice_id')
-    .select(({ fn }) => [
+    .innerJoin('billing.email as e', 'e.id', 'i.email_id')
+    .innerJoin('server.service as s', 's.id', 'e.server_id')
+    .select([
       'li.invoice_id as invoice_id',
-      'li.category as category',
-      fn.sum('li.amount').as('total_minor'),
+      'li.amount as amount',
+      effectiveCategory(orgId, { lineItems: 'li', service: 's' }).as('category'),
     ])
     .where('li.invoice_id', 'in', invoiceIds)
-    .where('i.org_id', '=', orgId)
-    .groupBy(['li.invoice_id', 'li.category'])
+    .where('i.org_id', '=', orgId);
+
+  const rows = await db
+    .selectFrom(resolved.as('t'))
+    .select(({ fn }) => [
+      't.invoice_id as invoice_id',
+      't.category as category',
+      fn.sum('t.amount').as('total_minor'),
+    ])
+    .groupBy(['t.invoice_id', 't.category'])
     .execute();
 
   const best = new Map<number, { category: string | null; total: number }>();
@@ -164,14 +186,24 @@ export async function getInvoice(orgId: number, invoiceId: number) {
  * columns into the response body as well.
  */
 export async function getLineItems(orgId: number, invoiceId: number) {
-  return db
-    .selectFrom('billing.invoice_line_items as li')
-    .innerJoin('billing.invoices as i', 'i.id', 'li.invoice_id')
-    .selectAll('li')
-    .where('li.invoice_id', '=', invoiceId)
-    .where('i.org_id', '=', orgId)
-    .orderBy('li.id')
-    .execute();
+  return (
+    db
+      .selectFrom('billing.invoice_line_items as li')
+      .innerJoin('billing.invoices as i', 'i.id', 'li.invoice_id')
+      // email and service are joined only to reach the vendor a category rule is
+      // keyed on. They contribute no columns: `selectAll('li')` stays qualified,
+      // or the joined tables' columns would spread into the response body.
+      .innerJoin('billing.email as e', 'e.id', 'i.email_id')
+      .innerJoin('server.service as s', 's.id', 'e.server_id')
+      .selectAll('li')
+      // Overrides the stored `category` selected by `selectAll` above — declared
+      // after it, so the learned rule is what the caller sees.
+      .select(effectiveCategory(orgId, { lineItems: 'li', service: 's' }).as('category'))
+      .where('li.invoice_id', '=', invoiceId)
+      .where('i.org_id', '=', orgId)
+      .orderBy('li.id')
+      .execute()
+  );
 }
 
 /**

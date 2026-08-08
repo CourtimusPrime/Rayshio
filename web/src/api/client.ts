@@ -43,7 +43,11 @@ export function apiGet<T>(
   return request<T>('GET', `/api${path}${qs ? `?${qs}` : ''}`);
 }
 
-export function apiSend<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) {
+export function apiSend<T>(
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+) {
   return request<T>(method, `/api${path}`, body);
 }
 

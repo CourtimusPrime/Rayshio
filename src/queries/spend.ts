@@ -35,7 +35,13 @@ export async function spendByService(
   if (range.dateTo) q = q.where(dateAtMost('billing.invoices.invoice_date', range.dateTo));
 
   const rows = await q
-    .groupBy(['billing.invoices.currency', displayName(orgId)])
+    /*
+     * `server.service.id` is grouped as well as the name expression. That
+     * expression is a correlated subquery over the service id, and Postgres
+     * rejects grouping by one whose referenced column is not itself grouped.
+     * The id is what the name depends on, so adding it changes no result.
+     */
+    .groupBy(['billing.invoices.currency', 'server.service.id', displayName(orgId)])
     .orderBy('total_minor', 'desc')
     .execute();
   return rows.map((r) => ({

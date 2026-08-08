@@ -158,6 +158,19 @@ export interface ClientBillingAddress {
   org_id: Int8;
 }
 
+export interface ClientCategoryRule {
+  category: string;
+  created_at: Generated<Timestamp>;
+  /**
+   * exact line-item text this applies to; null = every line item from the vendor
+   */
+  description: string | null;
+  id: Generated<Int8>;
+  org_id: Int8;
+  service_id: Int8;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ClientOrg {
   /**
    * currency the budget is denominated in; sums are never converted
@@ -239,6 +252,7 @@ export interface DB {
   "client.auth_user": ClientAuthUser;
   "client.auth_verification": ClientAuthVerification;
   "client.billing_address": ClientBillingAddress;
+  "client.category_rule": ClientCategoryRule;
   "client.org": ClientOrg;
   "client.org_invitation": ClientOrgInvitation;
   "client.org_member": ClientOrgMember;
