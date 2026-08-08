@@ -87,6 +87,22 @@ Two consequences worth knowing before you run anything:
   inside a button is invalid markup that browsers resolve by dropping one, taking
   its keyboard behaviour with it.
 
+- **`just dev-all` now runs the worker too**, alongside the API server and Vite,
+  and stops all three when any one of them exits. The worker binds no port, so
+  forgetting it is silent: uploads are accepted, enqueued, and then sit at
+  `pdf_fetched` forever while the UI says "cataloguing". That was mistaken for a
+  bug in the upload path twice in one session.
+
+  The recipe also refuses to start when 3000 or 5173 is already held. Vite does
+  not refuse — it shifts to 5174 and mentions it in one line — so a browser tab
+  still pointed at 5173 keeps talking to whatever stale process owns it, serving
+  the frontend fine while proxying `/api` to an old server that 404s anything
+  added since. That cost real debugging time.
+
+  Polled with `kill -0` rather than `wait -n`: macOS ships bash 3.2, where
+  `wait -n` does not exist, and under `set -e` it would take the whole stack
+  down on startup.
+
 - **Upload progress toast** (`web/src/components/UploadToast.tsx`). Reports what
   became of every uploaded file across four outcomes — added, duplicate, wasn't
   an invoice, errored — behind a hand-rolled puff spinner and dotted connectors.

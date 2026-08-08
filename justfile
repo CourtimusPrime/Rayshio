@@ -7,7 +7,7 @@
 default:
 	@just --list
 
-# Run both dev servers (alias for dev-all).
+# Run the whole dev stack (alias for dev-all).
 dev: dev-all
 
 # Vite dev server for the SPA — http://localhost:5173, proxies /api to :3000.
@@ -18,17 +18,51 @@ dev-web:
 dev-mcp:
 	pnpm mcp
 
-# Both servers in one terminal; Ctrl-C stops both.
+# BullMQ worker — drains the ingestion queue (nothing else does).
+dev-worker:
+	pnpm worker
+
+# The whole dev stack in one terminal; Ctrl-C stops all three.
 dev-all:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	# Refuse to start on top of something already holding a port.
+	#
+	# Vite does not refuse — it shifts to 5174 and prints one line about it. A
+	# browser tab still pointed at 5173 then talks to whatever stale process
+	# owns it, which serves the frontend perfectly well while proxying /api to
+	# an old server that 404s routes added since. That has cost real debugging
+	# time; the port being busy is worth stopping for.
+	for port in 3000 5173; do
+		if lsof -tiTCP:$port -sTCP:LISTEN >/dev/null 2>&1; then
+			echo "port $port is already in use — run 'just kill $port' or stop the process holding it" >&2
+			exit 1
+		fi
+	done
 	# Job control puts each background job in its own process group, so the
 	# trap can kill pnpm *and* the tsx/vite child it spawned.
 	set -m
 	pnpm mcp & mcp_pid=$!
 	pnpm dev:web & web_pid=$!
-	trap 'kill -- -$mcp_pid -$web_pid 2>/dev/null || true' EXIT INT TERM
-	wait
+	# The worker binds no port, so its absence is silent: uploads are accepted,
+	# enqueued, and then sit at `pdf_fetched` forever while the UI says
+	# "cataloguing". That has been mistaken for a bug in the upload path, which
+	# is why it belongs here rather than in a second terminal to remember.
+	pnpm worker & worker_pid=$!
+	trap 'kill -- -$mcp_pid -$web_pid -$worker_pid 2>/dev/null || true' EXIT INT TERM
+	# Stop everything as soon as any one of them dies, so a half-dead stack
+	# cannot keep serving — an API server that lost :3000 to a stray process
+	# fails in a way that looks exactly like a code bug.
+	#
+	# Polled rather than `wait -n`: macOS ships bash 3.2, where `wait -n` does
+	# not exist, and under `set -e` that would take the whole stack down on
+	# startup.
+	while kill -0 $mcp_pid 2>/dev/null &&
+		kill -0 $web_pid 2>/dev/null &&
+		kill -0 $worker_pid 2>/dev/null; do
+		sleep 1
+	done
+	echo "a dev process exited — stopping the rest" >&2
 
 # Compile the backend to dist/ and build the SPA.
 build:
