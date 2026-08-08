@@ -1,6 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  CalendarResponse,
   CategoriesResponse,
   DepartmentMode,
   InvoiceDetail,
@@ -103,11 +102,6 @@ export const monthQueries = {
   categories: (currency: string | undefined, month: string) => ({
     queryKey: ['categories', currency, month] as const,
     queryFn: () => apiGet<CategoriesResponse>('/categories', { currency, month }),
-    staleTime: PERIOD_STALE_TIME,
-  }),
-  calendar: (currency: string | undefined, month: string) => ({
-    queryKey: ['calendar', currency, month] as const,
-    queryFn: () => apiGet<CalendarResponse>('/calendar', { currency, month }),
     staleTime: PERIOD_STALE_TIME,
   }),
 };
@@ -345,15 +339,6 @@ export function useDeleteInvoice() {
       queryClient.removeQueries({ queryKey: ['invoice', invoiceId] });
       void queryClient.invalidateQueries();
     },
-  });
-}
-
-export function useCalendar(currency: string | undefined, month: string) {
-  return useQuery({
-    ...monthQueries.calendar(currency, month),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(currency),
-    retry: retryUnlessUnauthorized,
   });
 }
 

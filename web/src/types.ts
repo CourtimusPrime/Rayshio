@@ -287,38 +287,6 @@ export interface OutcomesResponse {
   }[];
 }
 
-export interface ReceivedEntry {
-  id: string;
-  invoice_id: number;
-  service: string;
-  /** Converted into the display currency. */
-  value: number;
-  original_value: number;
-  currency: string;
-  is_converted: boolean;
-  invoice_date: string;
-  status: DisplayStatus;
-}
-
-export interface ProjectedEntry {
-  id: string;
-  service: string;
-  value: number;
-  original_value: number;
-  currency: string;
-  invoice_date: string;
-}
-
-export interface CalendarResponse {
-  currency: string;
-  month: string;
-  received: ReceivedEntry[];
-  projected: ProjectedEntry[];
-  conversion: ConversionMeta;
-}
-
-export type PeriodType = 'quarter' | 'year';
-
 export interface FiscalPeriod {
   key: string;
   type: PeriodType;
@@ -331,6 +299,8 @@ export interface FiscalPeriod {
   to: string;
   months: string[];
 }
+
+export type PeriodType = 'quarter' | 'year';
 
 export interface ReportResponse {
   currency: string;

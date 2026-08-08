@@ -67,22 +67,6 @@ function TableSkeleton({ rows }: { rows: number }) {
   );
 }
 
-function CalendarSkeleton() {
-  return (
-    <section className={CARD}>
-      <div className="flex items-center justify-between px-5 py-4 md:px-6">
-        <Bar className="h-4 w-28" />
-        <Bar className="h-8 w-40" />
-      </div>
-      <div className="grid grid-cols-7 gap-2 border-t border-line p-5 md:p-6">
-        {Array.from({ length: 35 }, (_, i) => (
-          <Bar key={i} className="h-16" />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /**
  * Which skeleton belongs to which path.
  *
@@ -118,8 +102,6 @@ export function RouteSkeleton({ pathname }: { pathname: string }) {
             <CardSkeleton body="h-48" />
           </>
         );
-      case '/calendar':
-        return <CalendarSkeleton />;
       case '/connect':
         return (
           <>

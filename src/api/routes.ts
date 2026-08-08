@@ -72,7 +72,6 @@ import {
   shortMonthLabel,
   trailingMonths,
 } from '../queries/months.js';
-import { projectInvoices } from '../queries/projections.js';
 import {
   customLogoServices,
   renamedServices,
@@ -1032,83 +1031,6 @@ export function apiRouter(): Router {
     res.send(pdf);
   });
 
-  router.get('/calendar', async (req, res) => {
-    const orgId = orgOf(req);
-    const currency = requireCurrency(req.query.currency);
-    const month = optionalMonth(req.query.month);
-    const { from, to } = monthRange(month);
-
-    const received = await invoiceFacts(
-      orgId,
-      { dateFrom: from, dateTo: to },
-      { parsedOnly: false },
-    );
-
-    // projections are per-currency by nature (a vendor bills in one currency),
-    // so each vendor's cadence is derived in its own currency and converted after
-    const currencies = [...new Set(received.map((r) => r.currency))];
-    const projectedByCurrency = await Promise.all(
-      currencies.map((c) =>
-        projectInvoices(
-          orgId,
-          c,
-          to,
-          monthRange(shiftMonth(month, -PROJECTION_HISTORY_MONTHS)).from,
-        ).then((rows) => rows.map((p) => ({ ...p, currency: c }))),
-      ),
-    );
-    const projected = projectedByCurrency.flat();
-
-    const tracker = new ConversionTracker(currency);
-    const convert = await converterFor(
-      [
-        ...received.map((r) => ({ currency: r.currency, date: r.effective_date })),
-        ...projected.map((p) => ({ currency: p.currency, date: p.invoice_date })),
-      ],
-      currency,
-    );
-
-    // a projection is only interesting if it has not already been superseded by
-    // a real invoice landing in the same month
-    const receivedInMonth = new Set(
-      received.map((r) => `${r.service}:${r.effective_date.slice(0, 7)}`),
-    );
-
-    res.json({
-      currency,
-      month,
-      received: received.map((r) => {
-        const { minor, rate } = convert(r.value, r.currency, r.effective_date);
-        tracker.note(r.currency, rate);
-        return {
-          id: `invoice-${r.invoice_id}`,
-          invoice_id: r.invoice_id,
-          service: r.service,
-          value: minor,
-          original_value: r.value,
-          currency: r.currency,
-          is_converted: r.currency !== currency,
-          invoice_date: r.effective_date,
-          status: displayStatus(r.status),
-        };
-      }),
-      projected: projected
-        .filter((p) => p.invoice_date >= from && p.invoice_date <= to)
-        .filter((p) => !receivedInMonth.has(`${p.service}:${p.invoice_date.slice(0, 7)}`))
-        .map((p) => {
-          const { minor, rate } = convert(p.value, p.currency, p.invoice_date);
-          tracker.note(p.currency, rate);
-          return { ...p, value: minor, original_value: p.value };
-        }),
-      conversion: tracker.meta(),
-    });
-  });
-
-  /**
-   * A fiscal quarter or year, shaped like the dashboard's month view so the same
-   * cards render it. Aggregation and FX conversion are identical — only the date
-   * window differs.
-   */
   router.get('/reports', async (req, res) => {
     const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);

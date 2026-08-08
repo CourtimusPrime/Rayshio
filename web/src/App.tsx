@@ -26,7 +26,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default:
 const Breakdown = lazy(() => import('./pages/Breakdown').then((m) => ({ default: m.Breakdown })));
 const Invoices = lazy(() => import('./pages/Invoices').then((m) => ({ default: m.Invoices })));
 const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
-const Calendar = lazy(() => import('./pages/Calendar').then((m) => ({ default: m.Calendar })));
 const Mcp = lazy(() => import('./pages/Mcp').then((m) => ({ default: m.Mcp })));
 const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
@@ -176,7 +175,6 @@ function Shell() {
               <Route path="/breakdown" element={<Breakdown />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/reports" element={<Reports />} />
-              <Route path="/calendar" element={<Calendar />} />
               <Route path="/connect" element={<Mcp />} />
               {/* arriving at /signin while signed in: there is nothing to sign into */}
               <Route path="/signin" element={<Navigate replace to="/" />} />

@@ -290,6 +290,15 @@ Two consequences worth knowing before you run anything:
 
 ### Removed
 
+- **The Calendar tab**, and everything that existed only to serve it: the page,
+  `InvoiceCalendar`, the `/api/calendar` endpoint, `src/queries/projections.ts`
+  (its anticipated-invoice projection had no other consumer), the `useCalendar`
+  hook, the month prefetch for it, and its response types.
+
+  `projectInvoices` is worth knowing about if projections are ever wanted again —
+  it inferred a vendor's billing cadence from history — and it is in git history
+  rather than gone.
+
 - The two duplicate invoice pairs that predated de-duplication. `#3241` and
   `#3242` deleted, keeping the older `#3228` and `#3233`; Microsoft's parsed
   total drops 7285.26 → 6136.99, exactly the 1148.27 the redundant rows were

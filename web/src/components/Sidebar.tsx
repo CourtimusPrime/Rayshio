@@ -1,5 +1,4 @@
 import {
-  CalendarIcon,
   FileBarChartIcon,
   LayoutDashboardIcon,
   PieChartIcon,
@@ -21,7 +20,6 @@ const items = [
   { to: '/breakdown', label: 'Breakdown', icon: PieChartIcon, end: false },
   { to: '/invoices', label: 'Invoices', icon: ReceiptIcon, end: false },
   { to: '/reports', label: 'Reports', icon: FileBarChartIcon, end: false },
-  { to: '/calendar', label: 'Calendar', icon: CalendarIcon, end: false },
   // '/connect', not '/mcp': the MCP protocol endpoint owns /mcp, and a direct
   // load of that path must reach the JSON-RPC handler, not the dashboard
   { to: '/connect', label: 'MCP', icon: TerminalIcon, end: false },

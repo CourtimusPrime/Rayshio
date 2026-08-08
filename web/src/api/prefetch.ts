@@ -43,7 +43,6 @@ export function useMonthPrefetch(
           queryClient.prefetchQuery(monthQueries.summary(currency, month)),
           queryClient.prefetchQuery(monthQueries.services(currency, month)),
           queryClient.prefetchQuery(monthQueries.categories(currency, month)),
-          queryClient.prefetchQuery(monthQueries.calendar(currency, month)),
         ]).catch(() => {
           // a warm-up failure is not worth surfacing; the real query will retry
         });
