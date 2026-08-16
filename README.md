@@ -47,7 +47,7 @@ which pnpm script maps to which process. Recipe names cannot contain a colon —
 | `just`           | list recipes                                                        |
 | `just dev-mcp`   | `pnpm mcp` — API + MCP on `:3000`                                    |
 | `just dev-web`   | `pnpm dev:web` — Vite on `:5173`                                     |
-| `just dev-all`   | both of the above in one terminal; Ctrl-C stops both                 |
+| `just dev-all`   | API, Vite, and worker in one terminal; uses `:3100` / `:5273` when `:3000` / `:5173` are occupied |
 | `just dev`       | alias for `dev-all`                                                  |
 | `just build`     | `pnpm build` (backend `dist/` + `web/dist`)                          |
 | `just test`      | `pnpm test` — full vitest run                                        |
@@ -100,9 +100,11 @@ Two behaviours worth knowing:
   split across categories. Classification never fails an invoice — anything
   unclassified reads as `Other` until `pnpm cli categorize` retries it.
 
-Local development runs two processes: `pnpm mcp` and `pnpm dev:web` (or
-`just dev-all` for both), then open `http://localhost:5173`. In production only
-`pnpm start:mcp` is needed, provided `pnpm build` has produced `web/dist`.
+Local development runs an API, Vite server, and worker (`just dev-all` starts
+all three). It uses `http://localhost:5173` by default, or
+`http://localhost:5273` with an API on `:3100` if a tunnel occupies the default
+ports. In production only `pnpm start:mcp` is needed, provided `pnpm build` has
+produced `web/dist`.
 
 ## MCP tools
 

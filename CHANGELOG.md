@@ -43,6 +43,12 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-08-15
+
+### Changed
+
+- **`just dev` automatically selects `:3100` for the API and `:5273` for Vite when either default development port is occupied.** The local SSH tunnel reserves `:3000` and `:5173`; refusing to start made the standard development command unusable while preserving that tunnel. The chosen ports are propagated to Vite's proxy and Better Auth origin so sign-in and state-changing requests still reach the matching local API.
+
 ## 2026-08-08
 
 ### Added

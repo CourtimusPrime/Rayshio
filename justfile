@@ -26,24 +26,21 @@ dev-worker:
 dev-all:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# Refuse to start on top of something already holding a port.
-	#
-	# Vite does not refuse — it shifts to 5174 and prints one line about it. A
-	# browser tab still pointed at 5173 then talks to whatever stale process
-	# owns it, which serves the frontend perfectly well while proxying /api to
-	# an old server that 404s routes added since. That has cost real debugging
-	# time; the port being busy is worth stopping for.
-	for port in 3000 5173; do
+	api_port=3000
+	web_port=5173
+	if lsof -tiTCP:$api_port -sTCP:LISTEN >/dev/null 2>&1 || lsof -tiTCP:$web_port -sTCP:LISTEN >/dev/null 2>&1; then
+		api_port=3100
+		web_port=5273
+	fi
+	for port in $api_port $web_port; do
 		if lsof -tiTCP:$port -sTCP:LISTEN >/dev/null 2>&1; then
 			echo "port $port is already in use — run 'just kill $port' or stop the process holding it" >&2
 			exit 1
 		fi
 	done
-	# Job control puts each background job in its own process group, so the
-	# trap can kill pnpm *and* the tsx/vite child it spawned.
 	set -m
-	pnpm mcp & mcp_pid=$!
-	pnpm dev:web & web_pid=$!
+	PORT=$api_port MCP_PORT=$api_port PUBLIC_APP_URL=http://localhost:$web_port PUBLIC_MCP_URL=http://localhost:$api_port/mcp pnpm mcp & mcp_pid=$!
+	VITE_PORT=$web_port VITE_API_PORT=$api_port pnpm dev:web & web_pid=$!
 	# The worker binds no port, so its absence is silent: uploads are accepted,
 	# enqueued, and then sit at `pdf_fetched` forever while the UI says
 	# "cataloguing". That has been mistaken for a bug in the upload path, which

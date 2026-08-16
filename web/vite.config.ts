@@ -51,18 +51,52 @@ function seoAssets(origin: string): Plugin {
   };
 }
 
+/**
+ * Loads React Scan, and only ever on the dev server.
+ *
+ * `apply: 'serve'` is what keeps it out of `web/dist`: the plugin does not run
+ * during `vite build`, so `src/dev/react-scan.ts` is referenced by nothing the
+ * bundler can see and is never emitted. An `import.meta.env.DEV` guard around a
+ * static import would not do this — the import is hoisted out of the branch and
+ * the whole library ships regardless.
+ *
+ * It is injected as its own module script rather than imported from `main.tsx`
+ * because React Scan has to install the React DevTools hook before `react-dom`
+ * evaluates. Module scripts run in document order, so `order: 'pre'` puts this
+ * one ahead of the entry point; a dynamic import inside the entry would resolve
+ * after React had already initialised and instrument nothing.
+ */
+function reactScanDev(): Plugin {
+  return {
+    name: 'rayshio-react-scan-dev',
+    apply: 'serve',
+    transformIndexHtml: {
+      order: 'pre',
+      handler: () => [
+        {
+          tag: 'script',
+          attrs: { type: 'module', src: '/src/dev/react-scan.ts' },
+          injectTo: 'head-prepend' as const,
+        },
+      ],
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const origin = env.VITE_PUBLIC_ORIGIN ?? DEFAULT_ORIGIN;
+  const port = Number(env.VITE_PORT ?? 5173);
+  const apiPort = Number(env.VITE_API_PORT ?? 3000);
 
   return {
-    plugins: [react(), seoAssets(origin)],
+    plugins: [react(), seoAssets(origin), reactScanDev()],
     build: { outDir: 'dist', emptyOutDir: true },
     server: {
-      port: 5173,
+      port,
       // the API lives on the Express server; same-origin in production
       proxy: {
-        '/api': { target: 'http://localhost:3000', changeOrigin: true },
+        '/api': { target: `http://localhost:${apiPort}`, changeOrigin: true },
       },
     },
   };
