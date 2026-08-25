@@ -61,8 +61,8 @@ Two consequences worth knowing before you run anything:
 
 ### Notes
 
-- **Known unresolved:** the 4 affected production invoices still hold `value = 0`. The prompt fix only governs future extractions — correcting them needs a re-extract (`POST /api/invoices/:id/retry`, ids 3229, 3230, 3239, 3257) against a deployed worker carrying this change. Invoice 3228 is a genuine £0.00 free-trial receipt and must be left alone.
-- A full sweep of every invoice id in the org found no other instance of this pattern; the 5 other hidden zero-value rows are `failed` extractions unrelated to it.
+- **The 4 affected invoices were corrected by delete-and-re-upload, not by retry.** `POST /invoices/:id/retry` refuses a `parsed` invoice with 409 `already parsed`, which is deliberate — it exists to rescue invoices stuck in a non-terminal status, and re-running extraction over a finished one is a different operation. Since all four were uploads, `DELETE /api/invoices/:id` plus a re-upload was the supported path. Worth knowing before reaching for retry to pick up an extractor improvement: it will not do that, and there is currently no endpoint that will. New ids 3259, 3260, 3261, 3262 (was 3229, 3230, 3239, 3257), all landing on the amounts predicted from their line items.
+- A full sweep of every invoice id in the org found no other instance of this pattern; the 5 other hidden zero-value rows are `failed` extractions unrelated to it. Invoice 3228 was deliberately left alone — a genuine £0.00 free-trial receipt, and the case the prompt change had to preserve.
 
 ---
 
