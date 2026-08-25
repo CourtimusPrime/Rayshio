@@ -43,6 +43,29 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-08-25
+
+### Fixed
+
+- **A paid receipt no longer extracts as a £0.00 invoice.** `EXTRACT_SYSTEM` listed an "amount already paid" among the things that reduce what is owed and must be emitted as a negative line item, and told the model that when a document shows a Total and a lower Amount due, the total is the *amount due*. On an already-paid receipt both rules fire together: Mailchimp's PDF carries a `Paid via Mastercard ending in 4149  £42.93` line and a £0.00 balance, so the model emitted `[Standard plan 3577, VAT 715, Paid via Mast… -4293]` with a total of 0, and the invoice recorded no spend at all.
+
+  The prompt now separates a payment *record* from a *credit*: a credit comes from the vendor's side (applied balance, account credit, discount, proration) and genuinely lowers the cost; a payment comes from the customer's own card or bank and does not. A payment line is omitted from `line_items` entirely and `total_minor` is the amount **charged**, never the zero balance left behind after settlement. The existing applied-balance worked example is unchanged, and a real £0.00 invoice — a 100% free-trial discount that cancels the charge on the vendor's side — still extracts as 0.
+
+  Found by importing 31 Mailchimp receipts: 4 of them (`MC09640739`, `MC09710958`, `MC10207397`, `MC11908723`) stored `value = 0` and were hidden from the invoices list by `zero_charge_mode`, silently losing £219.58 of real spend.
+
+### Added
+
+- **`suspiciousZeroTotal` in `src/pipeline/reconcile.ts`, and escalation on it in stage 3.** `reconcile` could never have caught the bug above, because that extraction is *self-consistent* — the line items sum to exactly the reported total of 0. Sum and total were simply both wrong, so arithmetic had nothing to object to.
+
+  Nothing in the numbers separates it from a genuine zero, either: a 100% discount produces the same shape (a charge, an equal-and-opposite negative, a total of 0). Only the *description* of the negative line says which it is, and that is a judgement for the model. So the check rejects nothing — it flags the shape and the extract stage escalates to the stronger model for a second read, keeping the original answer unless the escalated one also reconciles. A genuine zero survives unchanged; the cost of the false positive is one extra LLM call on a document that charged nothing.
+
+### Notes
+
+- **Known unresolved:** the 4 affected production invoices still hold `value = 0`. The prompt fix only governs future extractions — correcting them needs a re-extract (`POST /api/invoices/:id/retry`, ids 3229, 3230, 3239, 3257) against a deployed worker carrying this change. Invoice 3228 is a genuine £0.00 free-trial receipt and must be left alone.
+- A full sweep of every invoice id in the org found no other instance of this pattern; the 5 other hidden zero-value rows are `failed` extractions unrelated to it.
+
+---
+
 ## 2026-08-15
 
 ### Changed

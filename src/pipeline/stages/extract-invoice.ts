@@ -7,7 +7,7 @@ import { getPdf } from '../../mongo/pdfs.js';
 import type { JobPayloads } from '../../queue/queues.js';
 import { DUPLICATE_PREFIX, NOT_AN_INVOICE_REASON } from '../failure-reasons.js';
 import { pdfToText } from '../pdf-text.js';
-import { reconcile } from '../reconcile.js';
+import { reconcile, suspiciousZeroTotal } from '../reconcile.js';
 import { attachUploadedInvoiceVendor, isUploadedInvoice } from '../uploads.js';
 
 /**
@@ -73,7 +73,8 @@ async function markFailed(invoiceId: number, reason: string): Promise<string> {
 
 /**
  * Stage 3. PDF (or body) text → LLM structured extraction → reconciliation → write.
- * Reconciliation failure retries once on the escalation model before failing the invoice.
+ * Reconciliation failure retries once on the escalation model before failing the invoice,
+ * as does a suspicious zero total — see `suspiciousZeroTotal`.
  */
 export async function extractInvoice(payload: JobPayloads['extract-invoice']): Promise<string> {
   const { accountId, invoiceId, messageId } = payload;
@@ -104,16 +105,28 @@ export async function extractInvoice(payload: JobPayloads['extract-invoice']): P
   }
 
   let rec = reconcile(extraction);
-  if (!rec.ok) {
+  /*
+   * Escalate on a reconciliation failure, and also on a total of zero that had
+   * positive charges in it — see `suspiciousZeroTotal`. The second case is not a
+   * failure: sum and total agree, so the old code accepted it and wrote a £0.00
+   * invoice for a receipt that really charged £42.93. It reconciles because both
+   * halves are wrong together, which is precisely why arithmetic cannot catch it
+   * and a stronger model has to re-read the document.
+   */
+  if (!rec.ok || suspiciousZeroTotal(extraction)) {
     try {
       const escalated = await llmExtract(text, { escalate: true });
       const escalatedRec = reconcile(escalated);
+      // Only take the escalated answer if it reconciles. On the suspicious-zero
+      // path the original already reconciled, so a worse second answer must not
+      // replace a self-consistent first one.
       if (escalatedRec.ok) {
         extraction = escalated;
         rec = escalatedRec;
       }
     } catch {
-      // escalation attempt failed — fall through to reconciliation failure
+      // escalation attempt failed — keep the first extraction and let the
+      // reconciliation check below decide whether it is usable
     }
   }
   if (!rec.ok) {

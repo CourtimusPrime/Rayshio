@@ -14,16 +14,33 @@ Rules:
   fees, credits, or discounts as separate lines, include them as line items so the sum matches.
 - Credits are NEGATIVE line items, and a credit is often written without a visible minus
   sign — extracting a PDF to text frequently loses it. Decide by meaning, not by the
-  character: an "applied balance", "account credit", "amount already paid", a discount
-  ("$20.00 off"), or proration for time you are giving back ("Unused time on <plan>",
-  "Credit for unused time") all REDUCE what is owed, so emit them negative even when the
-  document shows a bare "$5.00".
+  character: an "applied balance", "account credit", a discount ("$20.00 off"), or
+  proration for time you are giving back ("Unused time on <plan>", "Credit for unused
+  time") all REDUCE what is owed, so emit them negative even when the document shows a
+  bare "$5.00".
+- A PAYMENT RECORD IS NOT A LINE ITEM AND IS NOT A CREDIT. A line naming the instrument
+  that settled the bill — "Paid via Mastercard ending in 4149", "Payment received",
+  "Charged to Visa ending 1234", "Paid by card on 2024-05-19" — records money moving,
+  not a charge and not a reduction of one. OMIT it from line_items entirely and do not
+  let it affect total_minor. This is the difference that matters: a credit comes from
+  the vendor's side (their balance, their discount, their proration) and lowers the
+  cost; a payment comes from the customer's own card or bank and does not.
+- A RECEIPT FOR SOMETHING ALREADY PAID IS STILL AN INVOICE FOR WHAT IT CHARGED.
+  total_minor is the amount CHARGED, never the zero balance left after settlement.
+  Worked example: Standard plan $35.77, Tax VAT $7.15, "Paid via Mastercard ending in
+  4149 $42.93", Amount due $0.00 -> total_minor 4293 with line items 3577 and 715,
+  which sum to 4293. The payment line does not appear.
 - When a document shows both a "Total" and a lower "Amount due" (or "Balance due"),
-  total_minor is the AMOUNT DUE, and whatever closed the gap — usually an applied
-  balance or credit — must appear as its own negative line item. Worked example:
-  Pro plan $19.90, Unused time on Hobby plan $4.98, Subtotal $14.92, Applied balance
-  $5.00, Amount due $9.92 -> total_minor 992 with line items 1990, -498 and -500,
-  which sum to 992.
+  total_minor is the AMOUNT DUE, and whatever closed the gap must appear as its own
+  negative line item — PROVIDED the gap was closed by a credit. If the gap was closed
+  by a payment, the rule above wins: total_minor stays the amount charged. Worked
+  example: Pro plan $19.90, Unused time on Hobby plan $4.98, Subtotal $14.92, Applied
+  balance $5.00, Amount due $9.92 -> total_minor 992 with line items 1990, -498 and
+  -500, which sum to 992.
+- total_minor of 0 is correct only when the document genuinely charged nothing — a 100%
+  discount or free trial that cancels the charge on the vendor's side. If you are about
+  to return 0 because a payment cancelled the charge, you have made this mistake: return
+  the amount charged instead.
 - rate_minor is the per-unit rate in minor units; null when the line has no unit rate.
 - Dates in YYYY-MM-DD. currency is the 3-letter ISO code shown on the invoice.
 - period_start/period_end: the billing period (invoice-level, and per-line when shown).
