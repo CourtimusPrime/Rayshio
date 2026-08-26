@@ -1,6 +1,8 @@
-import { Loader2Icon, UploadIcon } from 'lucide-react';
-import { useRef } from 'react';
+import { Loader2Icon } from 'lucide-react';
+import { type FocusEvent, useRef } from 'react';
 import { useUploads } from '../state/uploads';
+import { UploadAnimated } from './icons/UploadAnimated';
+import type { AnimatedIconHandle } from './icons/handle';
 
 /**
  * Upload invoice PDFs the mailbox never received — a vendor that bills through
@@ -14,8 +16,19 @@ import { useUploads } from '../state/uploads';
  */
 export function UploadInvoices({ buttonClassName = '' }: { buttonClassName?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const iconRef = useRef<AnimatedIconHandle>(null);
   const { startUpload, batch } = useUploads();
   const busy = batch?.uploading ?? false;
+
+  /*
+   * Hover plays the arrow; clicking must not. Clicking focuses the button and
+   * opens the file dialog, and replaying the icon underneath a modal the user
+   * is now looking at is motion nobody asked for. `:focus-visible` is false for
+   * a pointer click and true for Tab, so keyboard users keep the feedback.
+   */
+  const playOnKeyboardFocus = (event: FocusEvent<HTMLButtonElement>) => {
+    if (event.target.matches(':focus-visible')) iconRef.current?.play();
+  };
 
   return (
     <>
@@ -37,12 +50,14 @@ export function UploadInvoices({ buttonClassName = '' }: { buttonClassName?: str
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
+        onMouseEnter={() => iconRef.current?.play()}
+        onFocus={playOnKeyboardFocus}
         className={`press flex h-9 shrink-0 items-center gap-2 rounded-lg border border-line bg-surface px-3.5 text-footnote font-medium text-ink-900 transition-colors hover:bg-canvas disabled:opacity-60 ${buttonClassName}`}
       >
         {busy ? (
           <Loader2Icon className="h-4 w-4 animate-spin text-ink-400" strokeWidth={1.75} />
         ) : (
-          <UploadIcon className="h-4 w-4 text-ink-400" strokeWidth={1.75} />
+          <UploadAnimated ref={iconRef} className="h-4 w-4 text-ink-400" strokeWidth={1.75} />
         )}
         {busy ? 'Uploading…' : 'Upload invoices'}
       </button>
