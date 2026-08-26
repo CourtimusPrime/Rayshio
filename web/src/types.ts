@@ -318,3 +318,55 @@ export interface ReportResponse {
   available_periods: FiscalPeriod[];
   conversion: ConversionMeta;
 }
+
+/**
+ * The Accountant tab.
+ *
+ * `summary` describes what is *outstanding* — invoices this recipient has never
+ * been sent — not the workspace's spend. Changing the accountant's address
+ * makes everything outstanding again for the new address, which is deliberate:
+ * a new firm gets the full history rather than whatever happened to arrive
+ * after the switch.
+ */
+export interface AccountantSummary {
+  invoice_count: number;
+  service_count: number;
+  period_start: string | null;
+  period_end: string | null;
+  total_minor: number;
+  currency: string;
+}
+
+export interface AccountantDelivery {
+  id: number;
+  recipient: string;
+  sent_at: string;
+  invoice_count: number;
+  service_count: number;
+  period_start: string | null;
+  period_end: string | null;
+  total_minor: number;
+  currency: string;
+  status: 'sent' | 'failed' | string;
+  error: string | null;
+}
+
+export interface AccountantState {
+  recipient: string | null;
+  /** False when the deployment has no mail provider configured. */
+  email_configured: boolean;
+  summary: AccountantSummary;
+  services: { service: string; count: number; total_minor: number }[];
+  /** Outstanding invoices with no stored PDF — sent as figures, not documents. */
+  without_pdf_count: number;
+  deliveries: AccountantDelivery[];
+}
+
+export interface AccountantSendResult {
+  recipient: string;
+  delivery_id: number;
+  summary: AccountantSummary;
+  /** Left for the next send because the message hit its attachment ceiling. */
+  deferred_count: number;
+  without_pdf_count: number;
+}

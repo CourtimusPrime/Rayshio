@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import express, { type Request, Router } from 'express';
 import { z } from 'zod';
+import {
+  NoRecipientError,
+  NothingToSendError,
+  outstanding,
+  sendOutstanding,
+} from '../accountant/deliver.js';
 import { requireAuth } from '../auth/context.js';
 import { CATEGORIES, normalizeCategory } from '../categories.js';
 import { config, publicMcpUrl } from '../config.js';
+import { EmailNotConfiguredError } from '../email/send.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
@@ -20,6 +27,11 @@ import {
   deleteUploadedInvoice,
   isUploadedInvoice,
 } from '../pipeline/uploads.js';
+import {
+  clearAccountantEmail,
+  recentDeliveries,
+  setAccountantEmail,
+} from '../queries/accountant.js';
 import {
   deleteCategoryRule,
   deleteCategoryRules,
@@ -1182,6 +1194,79 @@ export function apiRouter(): Router {
       monthly_budget_minor,
       currency: currency === null ? null : currency.toUpperCase(),
     });
+  });
+
+  /*
+   * The Accountant tab.
+   *
+   * Three routes and no per-invoice endpoint, deliberately: what is outstanding
+   * is derived from the delivery ledger rather than chosen, so there is nothing
+   * for a client to select, deselect, or get wrong.
+   */
+  router.get('/accountant', async (req, res) => {
+    const orgId = orgOf(req);
+    const currency = requireCurrency(req.query.currency);
+    const [preview, deliveries] = await Promise.all([
+      outstanding(orgId, currency),
+      recentDeliveries(orgId),
+    ]);
+    res.json({
+      ...preview,
+      deliveries: deliveries.map((d) => ({
+        ...d,
+        sent_at: d.sent_at.toISOString(),
+      })),
+    });
+  });
+
+  const accountantBody = z.object({
+    /*
+     * Nullable, which is how the address is cleared. Clearing it does not touch
+     * the ledger: setting the same address again later must not resend
+     * everything that address has already had.
+     */
+    email: z.string().email('enter a valid email address').nullable(),
+  });
+
+  router.put('/accountant', async (req, res) => {
+    const orgId = orgOf(req);
+    const parsed = accountantBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequest(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    const email = parsed.data.email?.trim().toLowerCase() ?? null;
+    if (email === null) {
+      await clearAccountantEmail(orgId);
+    } else {
+      await setAccountantEmail(orgId, email);
+    }
+    res.json({ email });
+  });
+
+  router.post('/accountant/send', async (req, res) => {
+    const orgId = orgOf(req);
+    const currency = requireCurrency(
+      typeof req.body?.currency === 'string' ? req.body.currency : req.query.currency,
+    );
+
+    try {
+      res.json(await sendOutstanding(orgId, currency));
+    } catch (error) {
+      /*
+       * These three are the user's situation, not a server fault, and each has
+       * a fix the user can act on — so they are 4xx with the reason intact
+       * rather than the generic 500 the error middleware would produce.
+       * `sendOutstanding` has already recorded a failed provider send in the
+       * ledger by the time anything is thrown from it.
+       */
+      if (error instanceof NoRecipientError) throw new BadRequest(error.message);
+      if (error instanceof NothingToSendError) throw new BadRequest(error.message);
+      if (error instanceof EmailNotConfiguredError) {
+        res.status(503).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
   });
 
   return router;

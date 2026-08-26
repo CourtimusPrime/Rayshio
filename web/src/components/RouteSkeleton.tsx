@@ -102,6 +102,15 @@ export function RouteSkeleton({ pathname }: { pathname: string }) {
             <CardSkeleton body="h-48" />
           </>
         );
+      case '/accountant':
+        // recipient card, outstanding figures + vendor list, then history
+        return (
+          <>
+            <CardSkeleton body="h-16" />
+            <CardSkeleton body="h-40" />
+            <TableSkeleton rows={3} />
+          </>
+        );
       case '/connect':
         return (
           <>

@@ -18,7 +18,12 @@ import { keepsZeroCharges } from './zero-charges.js';
  */
 
 const EFFECTIVE = sql`coalesce(billing.invoices.invoice_date, billing.email.delivered_at::date)`;
-const EFFECTIVE_DATE = sql<string>`to_char(${EFFECTIVE}, 'YYYY-MM-DD')`;
+/**
+ * Exported so anything else that dates an invoice uses this definition rather
+ * than its own coalesce — a second copy that forgot the fallback would date a
+ * third of the invoices differently from every figure on the dashboard.
+ */
+export const EFFECTIVE_DATE = sql<string>`to_char(${EFFECTIVE}, 'YYYY-MM-DD')`;
 
 const effectiveAtLeast = (d: string): Expression<SqlBool> =>
   sql<SqlBool>`${EFFECTIVE} >= ${d}::date`;

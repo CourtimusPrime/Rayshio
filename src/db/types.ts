@@ -15,6 +15,30 @@ export type Numeric = ColumnType<string, number | string, number | string>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface BillingAccountantDelivery {
+  currency: string;
+  error: string | null;
+  id: Generated<Int8>;
+  invoice_count: Generated<number>;
+  org_id: Int8;
+  period_end: Timestamp | null;
+  period_start: Timestamp | null;
+  recipient: string;
+  sent_at: Generated<Timestamp>;
+  service_count: Generated<number>;
+  status: Generated<string>;
+  /**
+   * total in `currency` minor units, converted at each invoice's own rate
+   */
+  total_minor: Generated<Int8>;
+}
+
+export interface BillingAccountantDeliveryItem {
+  delivery_id: Int8;
+  invoice_id: Int8;
+  recipient: string;
+}
+
 export interface BillingEmail {
   created_at: Generated<Timestamp>;
   delivered_at: Timestamp;
@@ -89,6 +113,12 @@ export interface ClientAccount {
   provider: string;
   refresh_token_encrypted: string;
   status: Generated<string>;
+}
+
+export interface ClientAccountant {
+  email: string;
+  org_id: Int8;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface ClientApiKey {
@@ -246,10 +276,13 @@ export interface ServerService {
 }
 
 export interface DB {
+  "billing.accountant_delivery": BillingAccountantDelivery;
+  "billing.accountant_delivery_item": BillingAccountantDeliveryItem;
   "billing.email": BillingEmail;
   "billing.invoice_line_items": BillingInvoiceLineItems;
   "billing.invoices": BillingInvoices;
   "client.account": ClientAccount;
+  "client.accountant": ClientAccountant;
   "client.api_key": ClientApiKey;
   "client.auth_account": ClientAuthAccount;
   "client.auth_session": ClientAuthSession;

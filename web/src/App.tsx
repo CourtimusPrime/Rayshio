@@ -26,6 +26,9 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default:
 const Breakdown = lazy(() => import('./pages/Breakdown').then((m) => ({ default: m.Breakdown })));
 const Invoices = lazy(() => import('./pages/Invoices').then((m) => ({ default: m.Invoices })));
 const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
+const Accountant = lazy(() =>
+  import('./pages/Accountant').then((m) => ({ default: m.Accountant })),
+);
 const Mcp = lazy(() => import('./pages/Mcp').then((m) => ({ default: m.Mcp })));
 const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
@@ -154,8 +157,12 @@ function Shell() {
         <TopBar
           title={APP_TITLES[pathname] ?? 'Dashboard'}
           scrolled={!atTop}
-          /* Reports drives its own fiscal period; see TopBar. */
-          showMonthNav={pathname !== '/reports'}
+          /*
+            Reports drives its own fiscal period, and Accountant is scoped by
+            what has been sent rather than by a month — a month picker above
+            either one would appear to filter a figure it has no effect on.
+          */
+          showMonthNav={pathname !== '/reports' && pathname !== '/accountant'}
         />
         <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-6 md:px-8 md:py-8">
           {/*
@@ -175,6 +182,7 @@ function Shell() {
               <Route path="/breakdown" element={<Breakdown />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/accountant" element={<Accountant />} />
               <Route path="/connect" element={<Mcp />} />
               {/* arriving at /signin while signed in: there is nothing to sign into */}
               <Route path="/signin" element={<Navigate replace to="/" />} />

@@ -11,6 +11,7 @@ export const APP_TITLES: Record<string, string> = {
   '/breakdown': 'Breakdown',
   '/invoices': 'Invoices',
   '/reports': 'Reports',
+  '/accountant': 'Accountant',
   '/connect': 'MCP',
 };
 

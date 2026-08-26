@@ -1,5 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AccountantSendResult,
+  AccountantState,
   CategoriesResponse,
   DepartmentMode,
   InvoiceDetail,
@@ -412,6 +414,55 @@ export function useSetBudget() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['meta'] });
       void queryClient.invalidateQueries({ queryKey: ['summary'] });
+    },
+  });
+}
+
+/**
+ * What is outstanding for the accountant, in the workspace's display currency.
+ *
+ * Not cached across currencies by accident: the key carries the currency
+ * because the total is converted server-side, and a GBP figure shown under a
+ * USD heading is the kind of error nobody spots until a filing is wrong.
+ *
+ * `staleTime: 0` — unlike a month's figures, this changes the instant an
+ * invoice is ingested or a send completes, and the number on this page is the
+ * one the user is about to act on.
+ */
+export function useAccountant(currency: string | undefined) {
+  return useQuery({
+    queryKey: ['accountant', currency],
+    queryFn: () => apiGet<AccountantState>('/accountant', { currency }),
+    // The workspace has no currency until `meta` lands; firing without one
+    // would 400 on every first paint.
+    enabled: Boolean(currency),
+    retry: retryUnlessUnauthorized,
+  });
+}
+
+export function useSetAccountantEmail() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string | null) =>
+      apiSend<{ email: string | null }>('PUT', '/accountant', { email }),
+    /*
+     * The address is what "outstanding" is measured against, so changing it
+     * changes the count — refetch rather than patch the cache, since only the
+     * server knows what the new address has already had.
+     */
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['accountant'] });
+    },
+  });
+}
+
+export function useSendToAccountant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (currency: string) =>
+      apiSend<AccountantSendResult>('POST', '/accountant/send', { currency }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['accountant'] });
     },
   });
 }
