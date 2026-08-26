@@ -107,11 +107,15 @@ Two consequences worth knowing before you run anything:
 
 ### Notes
 
-- **No email has actually been sent through Resend yet.** `RESEND_API_KEY` and `MAIL_FROM` are unset in development, so the tab correctly reports itself unconfigured and `POST /api/accountant/send` returns 503 before touching anything. Unverified until a provider is configured: that Resend accepts a message carrying a multi-megabyte zip, and that a bounce surfaces as a `failed` delivery row rather than a silent success.
+- **Resend sending is configured and proven end to end.** `RESEND_API_KEY` and `MAIL_FROM` (on `nczgroup.com`) are set, and the ledger records three real deliveries to the bookkeeping inbox — 150 + 150 + 31 — which is the full 331-invoice backlog drained in date order across three clicks, exactly as the per-send ceiling intends. A separate verification send of 150 invoices (4.7 MB zip, 8 vendors, Apr 2024 → Mar 2026) was accepted by Resend and then removed from the ledger so it could not mask anything.
 
-  What *is* verified against the live development database: `0015` applied cleanly (`pnpm migrate up`), and the outstanding query returns 331 parsed invoices across 12 vendors spanning 2024-04-19 → 2026-08-26, ordered oldest-first. 177 of those have no stored PDF — body-text extractions, which is why they are counted and listed in the covering note rather than held back. The routes are mounted and behind `requireAuth` (401 unauthenticated). The page itself was rendered at 1440/768/390 against a stubbed API: mount, all three states, no console errors, no horizontal overflow. Not yet driven end-to-end while signed in, which needs a seeded dev account.
+  The API key is send-only, so `GET /domains` answers 401 — the domain cannot be confirmed from a script, only by a send succeeding, which it does.
 
-- **The first send on this workspace will defer 181 invoices.** 331 outstanding against a 150-per-send ceiling, so it takes four clicks to drain the backlog — by design, and the tab says so after each send, but it is the kind of thing that reads as a bug the first time you meet it.
+  **A send takes ~45 seconds inside the HTTP request.** 150 blobs out of GridFS, zipped, then uploaded to Resend, all while the user waits on a spinner. It works, and it is the weakest part of the feature: it is close enough to proxy and gateway timeouts that a slower day would fail a send that had already gone out, leaving the ledger unwritten and 150 invoices arriving twice on the retry. Moving the send to the BullMQ worker — enqueue, report progress like uploads do — is the fix, and is not done.
+
+  78 of those 150 invoices had no PDF: they were billed in the email body, so their figures travel in the covering note instead.
+
+- **A backlog larger than 150 needs more than one click.** This workspace's 331 took three, which is by design and stated on the tab after each send — but it reads as a bug the first time you meet it, and nothing tells you up front that one press will not finish the job.
 
 ### Fixed
 
