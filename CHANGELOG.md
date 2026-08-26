@@ -61,6 +61,12 @@ Two consequences worth knowing before you run anything:
 
   **The route is unauthenticated by necessity** — Google follows the redirect with none of our cookies — **and it writes a `client.account` row.** Left open, anyone reaching it with their own authorization code could attach their mailbox to an arbitrary org and the ingestion pipeline would treat it as a real source. So the `state` is HMAC-signed with `BETTER_AUTH_SECRET` and carries the org id plus an expiry: only a process holding the secret can mint one, and the check is stateless, so the CLI and server need no shared store. Missing, forged and expired states are refused with one identical message, so probing the endpoint reveals nothing.
 
+### Added (tests)
+
+- **Test suite grown from 152 to 213 across 19 → 24 files**, covering the layers that decide the numbers on the dashboard and who may read them: FX conversion (`fx-rates`), aggregation (`converted`), the derived-URL config introduced above (`config`), MCP key auth (`mcp-auth`), key hashing (`api-keys`), the Gmail connect state signature (`connect-state`) and money formatting (`format`). `config.test.ts` had been a `1 + 1` placeholder since it was created.
+
+- **The suite is now hermetic.** `connect-state` was importing `src/db/client.ts`, which opens a Postgres pool at module load — meaning a test run on a developer machine dialled whatever `PGSQL_DATABASE_URL` pointed at, which is a live database. It is stubbed now, and the whole suite passes with all three stores aimed at a closed port, so `pnpm test` can never write to or hang on real infrastructure.
+
 ### Notes
 
 - **Deploying this requires setting `VITE_PUBLIC_ORIGIN` on both Railway services first.** `Invoice-MCP` and `Invoice-Worker` currently set `PUBLIC_APP_URL`, which this release stops reading. Without the new variable, Better Auth's `baseURL` falls back to `http://localhost:3000` and every production sign-in breaks. `AUTH_GOOGLE_CLIENT_ID`/`_SECRET`, `ALLOWED_SIGNUP_EMAILS`, `GOOGLE_REDIRECT_URI` and `PUBLIC_MCP_URL` can be deleted there at the same time.

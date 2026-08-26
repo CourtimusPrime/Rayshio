@@ -1,9 +1,17 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // The module reads BETTER_AUTH_SECRET through requireConfig at call time, and
 // config.ts parses process.env at import time — so the secret has to exist
 // before the import, not before the test.
 process.env.BETTER_AUTH_SECRET ??= 'x'.repeat(40);
+
+/*
+ * `connect.ts` imports the db client, which opens a Postgres pool at module
+ * load — against whatever PGSQL_DATABASE_URL happens to be set to, which on a
+ * developer machine is a real database. Signing a state parameter needs none of
+ * it, so the pool is stubbed out rather than opened and abandoned.
+ */
+vi.mock('../../src/db/client.js', () => ({ db: {}, pool: {} }));
 
 let mintConnectState: (orgId: number) => string;
 let verifyConnectState: (state: string) => number | undefined;
