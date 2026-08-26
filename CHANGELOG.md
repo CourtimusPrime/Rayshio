@@ -43,9 +43,55 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-08-27
+
+### Fixed
+
+- **Chart tooltip values were black in dark mode**, on a near-black panel — measured at 1.05:1 contrast, i.e. invisible. Recharts styles each tooltip row *inline* as `color: entry.color || '#000'`, and a `<Cell>` fill never reaches the tooltip payload, so every chart using per-bar colours hit the `#000` fallback. `contentStyle` cannot fix it: the row's own inline colour wins. The tooltip *label* was always correct, which is why only the numbers looked wrong.
+
+  A `tooltipItem` token now sits beside `tooltip` in the chart palette (`web/src/state/theme.tsx`) and is passed as `itemStyle` by all three bar charts. Verified by reading the computed colours out of the browser in both themes rather than by eye: 13.9:1 dark, 14.6:1 light.
+
+### Changed
+
+- **Every sidebar icon now plays a one-shot animation on hover.** Ported from lucide-animated.com's shadcn registry: `layout-grid` (Dashboard), `chart-pie` (Breakdown), `receipt-text` (Invoices), `file-chart-line` (Reports), `hand-coins` (Accountant), `terminal` (MCP) and `settings`. Dashboard, Invoices and Reports also changed glyph — `LayoutGrid`, `ReceiptText` and `FileChartLine` respectively.
+
+  **Ported by hand rather than via `pnpm dlx shadcn@latest add`.** Those files import `motion/react` and `@/lib/utils`, and `web/` has neither a `components.json` nor a `cn` helper. More to the point, `motion` *is* `framer-motion` under a newer name: installing it would put two copies of the same library in the bundle, with two `MotionConfig` contexts that cannot see each other — including the one `useMotionPrefs` reads for reduced motion.
+
+  Three of the registry animations loop or hold their end state and rely on a mouse-leave to reset, which the rail never sends: `terminal` repeats forever, `settings` stops at 180°, and `chart-pie` leaves the slice pulled out. Each is bounded here instead — two blinks, a full 360° turn, out-and-back — so a single hover is self-cleaning and no nav item is left mid-animation.
+
+  **The receipt icon's staggered container did not survive the port.** The registry drives three lines from a parent `<motion.g>` whose variants hold only a `transition`; under framer-motion 11 that propagates nothing, and the icon sat inert — no `strokeDasharray` written at all, confirmed in a browser. Each line now carries its own keyframes and delay.
+
+- **The "Upload invoices" button's arrow lifts on hover** (`upload` from the same registry), under the same rules as the rail: one lift that returns to rest, skipped under reduced motion, and not replayed by the click that opens the file dialog.
+
+- **Icons play on hover and on keyboard focus, never on click.** `onFocus` alone fired on every navigation, because clicking a link focuses it — so the icon replayed just as the page changed, competing with the route transition. The handler now checks `:focus-visible`, which is the browser's own answer to "did this focus come from the keyboard": false for a pointer click, true for Tab.
+
+  Under `prefers-reduced-motion` every one of these is skipped outright rather than shortened. Each icon's resting state is also where its animation ends, so there is nothing to settle.
+
+### Removed
+
+- **The search field in the sidebar rail.** The Invoices page carries its own search, which is where results land anyway; the rail's copy was a second entry point to the same place, and it was hidden below `md` regardless.
+
+---
+
 ## 2026-08-26
 
 ### Added
+
+- **Accountant tab — send every outstanding invoice to your accountant in one click.** New sidebar entry (Lucide `Landmark`, `/accountant`), an address to send to, and one button that zips everything that address has never received, emails it with a covering note, and records what went out.
+
+  **The tab has no invoice picker, deliberately.** `billing.accountant_delivery_item` records which invoice went to which address, with a unique index on `(invoice_id, recipient)`, so "outstanding" is derived rather than chosen. A checkbox list would exist only for the user to re-derive an answer the app already holds, and the cost of getting it wrong is asymmetric: an invoice deselected by accident is one nobody claims for.
+
+  **Tracking is per recipient, not per org.** Pointing the workspace at a new accountant makes every invoice outstanding again *for that address*, which is what someone changing firms wants, and leaves the previous address's history intact — so setting an old address back does not resend it everything. The copy on the tab says this, because otherwise the count jumping from 0 to 300 reads as a bug.
+
+  **The ledger is written after the provider accepts the message, never before.** A failed send leaves every invoice outstanding, so pressing the button again is a retry rather than a duplicate. The reverse order would trade "sent twice" for "silently never sent", and nobody notices an invoice that quietly stopped being outstanding. Failed attempts are still recorded, with the provider's reason, because an unchanged count and no explanation is indistinguishable from a dead button.
+
+  Only `parsed` invoices are eligible: a pending or failed row has no trustworthy total and often no PDF, and an accountant cannot tell a half-extracted invoice from a real one. It stays outstanding and goes out once the pipeline finishes with it. Invoices billed in the email body have no PDF to attach — they are counted, listed in the covering note with their figures, and marked delivered, or the outstanding count could never reach zero. Zero-charge rows follow the org's existing `zero_charge_mode`, so the email matches the dashboard; credit notes are always included.
+
+  Two ceilings, both deferring rather than dropping: 25 MB of attachments (Resend's limit is 40 MB of *base64*, a third larger than the bytes we measure) and 150 invoices per send. The second exists because 25 MB is roughly eight hundred PDFs, and pulling that many blobs out of GridFS inside one HTTP request is how a send dies to a proxy timeout with the mail already gone and the ledger not yet written. Overflow is taken oldest-first so a backlog drains in date order over successive clicks.
+
+  New: `migrations/0015_accountant_delivery.sql`, `src/accountant/`, `src/email/send.ts`, `src/queries/accountant.ts`, `web/src/pages/Accountant.tsx`, and `GET/PUT /api/accountant` plus `POST /api/accountant/send`.
+
+- **`RESEND_API_KEY` and `MAIL_FROM`** (both optional). Outbound email over Resend's HTTP API — a `fetch` call rather than the SDK, since the whole surface used is one POST. Optional so an instance without a mail provider boots and serves every other page normally; the Accountant tab reports itself unconfigured instead. `MAIL_FROM` must be on a domain verified with the provider, which config validation cannot check — that is the one failure that surfaces at send time rather than at boot.
 
 - **`openrouter-invoices` skill (`.claude/skills/openrouter-invoices/`) and `dev/openrouter.md`.** OpenRouter bills through Stripe, so its invoice PDFs are not on openrouter.ai at all — each one is a separate Stripe-hosted page that mints the PDF as a presigned S3 object with a 600-second expiry. Working that out cost most of a session, and none of it is recoverable from the code.
 
@@ -59,12 +105,22 @@ Two consequences worth knowing before you run anything:
 
   The prompt gets an explicit disambiguation rule, because `subscriptions` and `communications` genuinely overlap: a Mailchimp plan is `communications`, since the line names what is being bought. **Existing rows are not backfilled** — re-filing them is a `client.category_rule`, which is retroactive by design and reversible.
 
+### Notes
+
+- **No email has actually been sent through Resend yet.** `RESEND_API_KEY` and `MAIL_FROM` are unset in development, so the tab correctly reports itself unconfigured and `POST /api/accountant/send` returns 503 before touching anything. Unverified until a provider is configured: that Resend accepts a message carrying a multi-megabyte zip, and that a bounce surfaces as a `failed` delivery row rather than a silent success.
+
+  What *is* verified against the live development database: `0015` applied cleanly (`pnpm migrate up`), and the outstanding query returns 331 parsed invoices across 12 vendors spanning 2024-04-19 → 2026-08-26, ordered oldest-first. 177 of those have no stored PDF — body-text extractions, which is why they are counted and listed in the covering note rather than held back. The routes are mounted and behind `requireAuth` (401 unauthenticated). The page itself was rendered at 1440/768/390 against a stubbed API: mount, all three states, no console errors, no horizontal overflow. Not yet driven end-to-end while signed in, which needs a seeded dev account.
+
+- **The first send on this workspace will defer 181 invoices.** 331 outstanding against a 150-per-send ceiling, so it takes four clicks to drain the backlog — by design, and the tab says so after each send, but it is the kind of thing that reads as a bug the first time you meet it.
+
 ### Fixed
 
 - **`categories.test.ts` no longer hardcodes one migration filename.** It read `0012_category_taxonomy_v3.sql` directly, so the next migration to widen the taxonomy failed the test for the wrong reason — the constraint and the code agreed, but the assertion was checking a superseded file. It now scans `migrations/` for whichever migration defines `invoice_line_items_category_check` last, and slices to the Up section so the narrower CHECK restored by each Down section is never matched instead.
 - Dropped a dead `CATEGORY_META` import from `src/llm/category-prompt.ts`.
 
 ### Changed
+
+- **`src/db/types.ts` regenerated** (`pnpm codegen`) now that `0015` is applied, and the temporary `db.withTables(...)` shim in `src/queries/accountant.ts` deleted in favour of the generated types. The shim existed only because codegen needs a database that already has the tables, which is a chicken-and-egg every new migration hits: write the queries before the migration can be applied anywhere, or apply first and lose typechecking in between.
 
 - **One origin variable replaces three URLs, and one Google OAuth client replaces two.** The environment shrank from 16 variables to 11. `GOOGLE_REDIRECT_URI`, `PUBLIC_MCP_URL` and `PUBLIC_APP_URL` all described the same deployment and had to be kept consistent by hand; nothing enforced that, so moving host meant remembering three edits and forgetting one failed a long way from its cause — an OAuth callback pointing at the previous host, or an MCP page telling users to connect to localhost. They are now derived from `VITE_PUBLIC_ORIGIN` (`publicOrigin`, `googleRedirectUri`, `publicMcpUrl` in `src/config.ts`).
 
