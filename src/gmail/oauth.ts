@@ -1,5 +1,5 @@
 import { type Auth, google } from 'googleapis';
-import { config } from '../config.js';
+import { config, googleRedirectUri } from '../config.js';
 import { decryptToken } from '../crypto/tokens.js';
 import { db } from '../db/client.js';
 
@@ -9,7 +9,7 @@ export function createOAuthClient(): Auth.OAuth2Client {
   return new google.auth.OAuth2(
     config.GOOGLE_CLIENT_ID,
     config.GOOGLE_CLIENT_SECRET,
-    config.GOOGLE_REDIRECT_URI,
+    googleRedirectUri,
   );
 }
 

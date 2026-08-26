@@ -1,11 +1,26 @@
 import { exec } from 'node:child_process';
-import express from 'express';
-import { google } from 'googleapis';
-import { config } from '../../config.js';
-import { encryptToken } from '../../crypto/tokens.js';
+import { googleRedirectUri } from '../../config.js';
 import { db, pool } from '../../db/client.js';
-import { GMAIL_SCOPE, createOAuthClient } from '../../gmail/oauth.js';
+import { gmailConsentUrl } from '../../gmail/connect.js';
 
+/** How long to wait for the browser half of the flow before giving up. */
+const WAIT_TIMEOUT_MS = 5 * 60 * 1000;
+const POLL_INTERVAL_MS = 2000;
+
+/**
+ * Connect a mailbox.
+ *
+ * This command used to run the whole OAuth flow itself, including a throwaway
+ * Express server on the callback port. That made connecting a mailbox something
+ * only an operator's laptop could do — the deployed instance had no way to
+ * receive the redirect. The exchange now lives in the app at
+ * `GET /oauth/callback`, so this waits for the row rather than writing it.
+ *
+ * The consequence worth knowing: the app must be running and reachable at
+ * `VITE_PUBLIC_ORIGIN` for this to complete. Against production that is the
+ * Railway host and nothing local is needed; against a dev origin, the local
+ * server has to be up.
+ */
 export async function auth(orgId: number): Promise<void> {
   const org = await db
     .selectFrom('client.org')
@@ -16,81 +31,40 @@ export async function auth(orgId: number): Promise<void> {
     throw new Error(`org ${orgId} not found — run \`cli seed-org --name <name>\` first`);
   }
 
-  const client = createOAuthClient();
-  const authUrl = client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    scope: [GMAIL_SCOPE],
-  });
+  // Compared against, not just counted: a re-connect of a mailbox the org
+  // already has updates the existing row instead of inserting one, so waiting
+  // for the count to rise would hang forever on exactly the case most likely to
+  // be run twice.
+  const startedAt = new Date();
+  const authUrl = gmailConsentUrl(orgId);
 
-  const port = Number(new URL(config.GOOGLE_REDIRECT_URI).port || 80);
+  console.log(`\nOpen this URL to authorize:\n\n${authUrl}\n`);
+  console.log(`Waiting for ${googleRedirectUri} to receive the callback...`);
+  exec(`open "${authUrl}"`);
 
-  await new Promise<void>((resolve, reject) => {
-    const app = express();
+  const deadline = Date.now() + WAIT_TIMEOUT_MS;
+  for (;;) {
+    const account = await db
+      .selectFrom('client.account')
+      .select(['id', 'email_address'])
+      .where('org_id', '=', orgId)
+      .where('status', '=', 'active')
+      .where('connected_at', '>=', startedAt)
+      .orderBy('connected_at', 'desc')
+      .executeTakeFirst();
 
-    app.get('/oauth/callback', (req, res) => {
-      void (async () => {
-        try {
-          const code = String(req.query.code ?? '');
-          if (!code) throw new Error(`no code in callback: ${JSON.stringify(req.query)}`);
+    if (account) {
+      console.log(`connected account id=${account.id} ${account.email_address} (org ${orgId})`);
+      break;
+    }
 
-          const { tokens } = await client.getToken(code);
-          const refreshToken = tokens.refresh_token;
-          if (!refreshToken) {
-            throw new Error('Google did not return a refresh token — revoke prior grant and retry');
-          }
-          client.setCredentials(tokens);
-
-          const gmail = google.gmail({ version: 'v1', auth: client });
-          const profile = await gmail.users.getProfile({ userId: 'me' });
-          const emailAddress = profile.data.emailAddress;
-          if (!emailAddress) throw new Error('could not resolve mailbox address');
-
-          const account = await db
-            .insertInto('client.account')
-            .values({
-              org_id: orgId,
-              provider: 'google',
-              email_address: emailAddress,
-              refresh_token_encrypted: encryptToken(refreshToken),
-              connected_at: new Date(),
-              status: 'active',
-            })
-            .onConflict((oc) =>
-              oc.columns(['org_id', 'email_address']).doUpdateSet({
-                refresh_token_encrypted: encryptToken(refreshToken),
-                connected_at: new Date(),
-                status: 'active',
-              }),
-            )
-            .returningAll()
-            .executeTakeFirstOrThrow();
-
-          await db
-            .insertInto('client.billing_address')
-            .values({ org_id: orgId, address: emailAddress })
-            .onConflict((oc) => oc.columns(['org_id', 'address']).doNothing())
-            .execute();
-
-          res.send('InvoiceMCP: mailbox connected. You can close this tab.');
-          console.log(`connected account id=${account.id} ${emailAddress} (org ${orgId})`);
-          server.close();
-          resolve();
-        } catch (err) {
-          res.status(500).send(String(err));
-          server.close();
-          reject(err as Error);
-        }
-      })();
-    });
-
-    const server = app.listen(port, () => {
-      console.log(`Waiting for OAuth callback on port ${port}...`);
-      console.log(`\nOpen this URL to authorize:\n\n${authUrl}\n`);
-      exec(`open "${authUrl}"`);
-    });
-    server.on('error', reject);
-  });
+    if (Date.now() > deadline) {
+      throw new Error(
+        `timed out after ${WAIT_TIMEOUT_MS / 60000} minutes — check the app is running and reachable at ${googleRedirectUri}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
 
   await pool.end();
 }

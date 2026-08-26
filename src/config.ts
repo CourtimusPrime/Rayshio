@@ -11,9 +11,20 @@ const envSchema = z.object({
   MONGODB_DATABASE_URL: z.string().url(),
   REDIS_DATABASE_URL: z.string().url(),
 
+  /*
+   * One Google OAuth client for both jobs: Gmail ingestion (`gmail.readonly`)
+   * and sign-in (`openid email profile`).
+   *
+   * These were two clients, because sharing one would show a mailbox-access
+   * consent screen for a plain login. That reasoning does not survive the app
+   * being an *internal* Google Workspace app: scopes are requested per
+   * authorization call, not per client, so the sign-in flow asks for its three
+   * and never mentions Gmail. Two clients bought nothing and cost a second pair
+   * of secrets to rotate, plus the failure mode where the wrong pair is edited
+   * and sign-in dies with `deleted_client`.
+   */
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
-  GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:8787/oauth/callback'),
 
   OPENROUTER_API_KEY: z.string().min(1).optional(),
   OPENROUTER_CLASSIFY_MODEL: z.string().default('google/gemini-2.5-flash-lite'),
@@ -36,41 +47,21 @@ const envSchema = z.object({
 
   SYNC_CRON: z.string().default('0 6 1 * *'),
 
-  /*
-   * Better Auth. Sign-in runs on its own Google OAuth client, separate from the
-   * Gmail one above: that one carries `gmail.readonly`, a *restricted* scope, so
-   * sharing it would show a mailbox-access consent screen for a plain login.
-   */
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
-  AUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-  AUTH_GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  /** Origin the app is served from — Better Auth's baseURL and the OAuth callback host. */
-  PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   /**
-   * Comma-separated sign-up allowlist. An address outside it can still get in
-   * by holding a pending `client.org_invitation`.
+   * The single origin the app is served from, and the root every other public
+   * URL is derived from — Better Auth's `baseURL`, the Gmail OAuth callback,
+   * and the MCP endpoint shown on the dashboard.
    *
-   * Empty, or the single entry `*`, means **open registration**. Both spellings
-   * exist because Railway will not store an empty string — it keeps the
-   * previous value — and deleting the variable there has no `--skip-deploys`,
-   * so it would force a deploy just to change a setting.
-   *
-   * Open is safe by construction: registering creates an account with no
-   * `client.org_member` row, which every /api route still refuses.
+   * Named `VITE_` because the SPA already had this variable: `web/vite.config.ts`
+   * bakes it into index.html, robots.txt and sitemap.xml at build time, since
+   * crawlers do not run our JavaScript and `<loc>` has no relative form. The
+   * server used to call the same value `PUBLIC_APP_URL`, so one origin was
+   * configured twice under two names and could disagree with itself.
    */
-  ALLOWED_SIGNUP_EMAILS: z
-    .string()
-    .default('')
-    .transform((s) =>
-      s
-        .split(',')
-        .map((e) => e.trim().toLowerCase())
-        .filter((e) => e !== ''),
-    ),
+  VITE_PUBLIC_ORIGIN: z.string().url().default('http://localhost:3000'),
   /** ECB-backed rate source used for query-time currency conversion. */
   FX_BASE_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
-  /** Endpoint the dashboard's MCP page tells users to point their client at. */
-  PUBLIC_MCP_URL: z.string().url().default('http://localhost:3000/mcp'),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -88,13 +79,38 @@ export const config: Config = (() => {
 })();
 
 /**
+ * Every public URL the app hands out, derived from the one origin.
+ *
+ * These were three separate environment variables (`GOOGLE_REDIRECT_URI`,
+ * `PUBLIC_MCP_URL`, `PUBLIC_APP_URL`) that had to be kept consistent by hand.
+ * Nothing enforced that, so a deploy to a new host meant remembering to change
+ * all three, and forgetting one produced a failure a long way from its cause —
+ * an OAuth callback pointing at the previous host, or an MCP page telling users
+ * to connect to localhost.
+ */
+export const publicOrigin = config.VITE_PUBLIC_ORIGIN.replace(/\/+$/, '');
+
+/**
+ * Where Google returns the Gmail authorization code.
+ *
+ * Served by the Express app (`GET /oauth/callback`), not by the CLI. It used to
+ * be a localhost-only URL because `cli auth` stood up a throwaway server on its
+ * port — which meant the Gmail connect flow could only ever be completed from
+ * an operator's laptop, never on the deployed instance.
+ */
+export const googleRedirectUri = `${publicOrigin}/oauth/callback`;
+
+/** Endpoint the dashboard's MCP page tells users to point their client at. */
+export const publicMcpUrl = `${publicOrigin}/mcp`;
+
+/**
  * Origins allowed to make state-changing requests: Better Auth's own
  * `trustedOrigins`, and the same-origin check on the rest of `/api`.
  *
  * The dev entries are why this exists. `pnpm dev:web` serves the SPA from
  * :5173 and proxies `/api` to :3000, and while that proxy rewrites the `Host`
  * header it forwards `Origin: http://localhost:5173` unchanged — correctly, as
- * the request really does originate there. With only `PUBLIC_APP_URL` trusted,
+ * the request really does originate there. With only the app origin trusted,
  * every sign-in and every PATCH from the dev server is rejected with
  * "Invalid origin".
  *
@@ -103,7 +119,7 @@ export const config: Config = (() => {
  */
 export const trustedOrigins: string[] = [
   ...new Set([
-    config.PUBLIC_APP_URL,
+    publicOrigin,
     ...(process.env.NODE_ENV === 'production'
       ? []
       : ['http://localhost:5173', 'http://localhost:3000']),

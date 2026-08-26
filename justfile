@@ -39,7 +39,7 @@ dev-all:
 		fi
 	done
 	set -m
-	PORT=$api_port MCP_PORT=$api_port PUBLIC_APP_URL=http://localhost:$web_port PUBLIC_MCP_URL=http://localhost:$api_port/mcp pnpm mcp & mcp_pid=$!
+	PORT=$api_port MCP_PORT=$api_port VITE_PUBLIC_ORIGIN=http://localhost:$web_port pnpm mcp & mcp_pid=$!
 	VITE_PORT=$web_port VITE_API_PORT=$api_port pnpm dev:web & web_pid=$!
 	# The worker binds no port, so its absence is silent: uploads are accepted,
 	# enqueued, and then sit at `pdf_fetched` forever while the UI says

@@ -71,7 +71,7 @@ export async function listMembershipsCommand(email: string): Promise<void> {
 /**
  * There is no mailer in this repo, so an invitation is a database row and the
  * link has to be passed along by hand. It still does the useful half: it lets
- * an address outside ALLOWED_SIGNUP_EMAILS complete sign-up, and it joins them
+ * an address Google admits complete sign-up, and it joins them
  * to the right org automatically once they do.
  */
 export async function inviteCommand(orgId: number, email: string, role: string): Promise<void> {

@@ -11,6 +11,7 @@ import { BadRequest, apiRouter } from '../api/routes.js';
 import { requireSameOrigin } from '../auth/context.js';
 import { auth } from '../auth/index.js';
 import { config } from '../config.js';
+import { completeGmailConnect, verifyConnectState } from '../gmail/connect.js';
 import { apiKeyAuth, orgForRequest } from './auth.js';
 import { registerTools } from './tools/index.js';
 
@@ -48,6 +49,66 @@ app.get('/healthz', (_req, res) => {
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use(express.json({ limit: '4mb' }));
+
+/** Minimal HTML for the Gmail-connect callback, which has no SPA to render into. */
+function connectPage(title: string, detail: string): string {
+  const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  return `<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><body style="font:16px/1.5 system-ui;margin:4rem auto;max-width:34rem;padding:0 1rem"><h1 style="font-size:1.25rem">${esc(title)}</h1><p>${esc(detail)}</p></body>`;
+}
+
+/*
+ * Where Google returns a Gmail authorization code.
+ *
+ * Unauthenticated by necessity — Google follows this redirect with none of our
+ * cookies — so the `state` carries a signed org id and is the only thing that
+ * authorises the write. See `verifyConnectState`.
+ *
+ * Deliberately outside `/api`: `requireSameOrigin` below would reject it, and
+ * correctly, since the request genuinely originates at accounts.google.com.
+ * It is a GET that Google drives, not a state-changing call from our own SPA.
+ */
+app.get('/oauth/callback', (req, res) => {
+  void (async () => {
+    const error = typeof req.query.error === 'string' ? req.query.error : undefined;
+    if (error) {
+      // Escaped: `error` is a query parameter, so echoing it raw would make this
+      // a reflected XSS on a route anyone can reach with any query string.
+      res.status(400).send(connectPage('Mailbox not connected', `Google reported: ${error}`));
+      return;
+    }
+
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const orgId = state ? verifyConnectState(state) : undefined;
+
+    // One message for missing, forged and expired state alike: a caller probing
+    // this endpoint learns nothing about which of those it hit.
+    if (!code || orgId === undefined) {
+      res
+        .status(400)
+        .send(connectPage('Mailbox not connected', 'That link is invalid or has expired.'));
+      return;
+    }
+
+    try {
+      const { emailAddress } = await completeGmailConnect(code, orgId);
+      console.log(`connected mailbox ${emailAddress} (org ${orgId})`);
+      res.send(
+        connectPage(
+          'Mailbox connected',
+          `${emailAddress} is now connected. You can close this tab.`,
+        ),
+      );
+    } catch (err) {
+      console.error('gmail connect failed:', err);
+      res
+        .status(500)
+        .send(
+          connectPage('Mailbox not connected', 'The connection failed. Check the server logs.'),
+        );
+    }
+  })();
+});
 
 // SameSite=Lax already blocks the classic cross-site post; this covers the rest
 // of /api. It deliberately does not cover POST /mcp — see requireSameOrigin.

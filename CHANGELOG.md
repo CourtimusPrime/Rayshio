@@ -43,6 +43,33 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-08-26
+
+### Changed
+
+- **One origin variable replaces three URLs, and one Google OAuth client replaces two.** The environment shrank from 16 variables to 11. `GOOGLE_REDIRECT_URI`, `PUBLIC_MCP_URL` and `PUBLIC_APP_URL` all described the same deployment and had to be kept consistent by hand; nothing enforced that, so moving host meant remembering three edits and forgetting one failed a long way from its cause — an OAuth callback pointing at the previous host, or an MCP page telling users to connect to localhost. They are now derived from `VITE_PUBLIC_ORIGIN` (`publicOrigin`, `googleRedirectUri`, `publicMcpUrl` in `src/config.ts`).
+
+  `VITE_PUBLIC_ORIGIN` was chosen over inventing a new name because the SPA already had it: `web/vite.config.ts` bakes it into index.html, robots.txt and sitemap.xml at build time. One origin was being configured twice under two names and could disagree with itself.
+
+- **`AUTH_GOOGLE_CLIENT_ID`/`_SECRET` deleted; sign-in now uses `GOOGLE_CLIENT_ID`/`_SECRET`.** The split existed because the Gmail client carries `gmail.readonly`, a restricted scope, and sharing it was expected to show a mailbox-access consent screen for a plain login. That is not how OAuth works here — scopes are requested per authorization call, not per client — so sign-in asks for `openid email profile` and never mentions Gmail. The second client bought nothing and cost a second pair of secrets to rotate, plus a failure mode that actually happened: editing the wrong pair, leaving sign-in pointed at a deleted client and failing with `Error 401: deleted_client`.
+
+- **`ALLOWED_SIGNUP_EMAILS` deleted.** Who may sign up is Google's decision, not ours — the OAuth client is an internal Workspace app, so Google refuses anyone outside the organisation before the callback reaches this process. The variable restated that rule in a second place where it could only ever disagree with the first, and it was set to `*` anyway, so it had been a no-op for as long as it existed. Registering still grants nothing on its own: a new user has no `client.org_member` row, so every `/api` route refuses them. The invitation hook is unchanged.
+
+### Added
+
+- **`GET /oauth/callback` on the app, replacing the throwaway server inside `cli auth`.** Connecting a mailbox used to run entirely in the CLI, which stood up an Express server on the port parsed out of `GOOGLE_REDIRECT_URI`. That works exactly once — on a laptop. The deployed instance could never complete the flow, because Google will not redirect to a port nothing is listening on and an operator's machine is not reachable from Google's servers. The exchange now lives in `src/gmail/connect.ts`, and `cli auth` mints the consent URL and polls for the row.
+
+  **The route is unauthenticated by necessity** — Google follows the redirect with none of our cookies — **and it writes a `client.account` row.** Left open, anyone reaching it with their own authorization code could attach their mailbox to an arbitrary org and the ingestion pipeline would treat it as a real source. So the `state` is HMAC-signed with `BETTER_AUTH_SECRET` and carries the org id plus an expiry: only a process holding the secret can mint one, and the check is stateless, so the CLI and server need no shared store. Missing, forged and expired states are refused with one identical message, so probing the endpoint reveals nothing.
+
+### Notes
+
+- **Deploying this requires setting `VITE_PUBLIC_ORIGIN` on both Railway services first.** `Invoice-MCP` and `Invoice-Worker` currently set `PUBLIC_APP_URL`, which this release stops reading. Without the new variable, Better Auth's `baseURL` falls back to `http://localhost:3000` and every production sign-in breaks. `AUTH_GOOGLE_CLIENT_ID`/`_SECRET`, `ALLOWED_SIGNUP_EMAILS`, `GOOGLE_REDIRECT_URI` and `PUBLIC_MCP_URL` can be deleted there at the same time.
+- **Two redirect URIs must be registered on the single Google client**: `<origin>/api/auth/callback/google` for sign-in and `<origin>/oauth/callback` for the Gmail connect. Locally that means both the `5173` and `5273` spellings, since `just dev` falls back to the second pair of ports whenever the ssh tunnels hold the first.
+- `cli auth` now needs the app running and reachable at `VITE_PUBLIC_ORIGIN` to complete. Against production nothing local is required; against a dev origin, the local server has to be up.
+- **Known unresolved:** `.env` still carries `DASHBOARD_SESSION_SECRET`, which no longer appears anywhere in `src/`. Left in place rather than deleted blind — it predates Better Auth and may be referenced by something outside this repo.
+
+---
+
 ## 2026-08-25
 
 ### Fixed

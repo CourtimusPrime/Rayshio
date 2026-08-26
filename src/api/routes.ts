@@ -3,7 +3,7 @@ import express, { type Request, Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/context.js';
 import { CATEGORIES, normalizeCategory } from '../categories.js';
-import { config } from '../config.js';
+import { config, publicMcpUrl } from '../config.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
@@ -201,7 +201,7 @@ export function apiRouter(): Router {
         quarter: periodsForMonths(monthKeys, fiscalStart, 'quarter'),
         year: periodsForMonths(monthKeys, fiscalStart, 'year'),
       },
-      mcp_endpoint: config.PUBLIC_MCP_URL,
+      mcp_endpoint: publicMcpUrl,
       last_ingest_at: lastIngest,
       /**
        * Vendors with an uploaded logo. ServiceLogo consults this to know when to

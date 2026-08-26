@@ -1,7 +1,6 @@
 import { betterAuth } from 'better-auth';
-import { APIError } from 'better-auth/api';
 import pg from 'pg';
-import { config, requireConfig, trustedOrigins } from '../config.js';
+import { config, publicOrigin, requireConfig, trustedOrigins } from '../config.js';
 import { acceptInvitation, pendingInvitationFor } from './memberships.js';
 
 /**
@@ -33,23 +32,20 @@ const authPool = new pg.Pool({
   options: '-c search_path=client',
 });
 
-const googleCreds =
-  config.AUTH_GOOGLE_CLIENT_ID && config.AUTH_GOOGLE_CLIENT_SECRET
-    ? {
-        clientId: config.AUTH_GOOGLE_CLIENT_ID,
-        clientSecret: config.AUTH_GOOGLE_CLIENT_SECRET,
-      }
-    : undefined;
-
-if (!googleCreds) {
-  console.warn(
-    'AUTH_GOOGLE_CLIENT_ID/SECRET unset — Google sign-in is unavailable on this process',
-  );
-}
+/**
+ * The same Google client the Gmail ingestion uses. Scopes are per authorization
+ * request, not per client, so this flow asks for `openid email profile` and
+ * never shows a mailbox-access screen. Both values are required by the config
+ * schema, so sign-in cannot be half-configured.
+ */
+const googleCreds = {
+  clientId: config.GOOGLE_CLIENT_ID,
+  clientSecret: config.GOOGLE_CLIENT_SECRET,
+};
 
 export const auth = betterAuth({
   appName: 'Rayshio',
-  baseURL: config.PUBLIC_APP_URL,
+  baseURL: publicOrigin,
   secret: auth_secret,
   database: authPool,
   trustedOrigins,
@@ -73,7 +69,7 @@ export const auth = betterAuth({
     },
   },
 
-  ...(googleCreds ? { socialProviders: { google: googleCreds } } : {}),
+  socialProviders: { google: googleCreds },
 
   /*
    * Password sign-in exists so the Playwright harness has something it can
@@ -88,43 +84,23 @@ export const auth = betterAuth({
   },
 
   /*
-   * Sign-up gating. An empty ALLOWED_SIGNUP_EMAILS — or the single entry `*` —
-   * means open registration: anyone with a Google account may create one here.
-   * Any other list closes it to those addresses plus invitation holders.
+   * No sign-up allowlist. Who may register is decided by Google, not by us:
+   * the OAuth client is an *internal* Workspace app, so Google refuses anyone
+   * outside the organisation before the callback ever reaches this process.
+   * `ALLOWED_SIGNUP_EMAILS` restated that rule in a second place, where it
+   * could only ever disagree with the first — and it was set to `*` anyway,
+   * so it had been a no-op for as long as it existed.
    *
-   * Open is safe by design rather than by trust. Creating an account grants no
-   * access to anything: a new user has no `client.org_member` row, so
-   * `resolveAuthContext` yields no org and every /api route still refuses them.
-   * Membership is always a deliberate act (`pnpm cli grant-membership`).
-   *
-   * Rejection *throws* rather than returning false: throwing an APIError is
-   * what Better Auth turns into a clean error redirect back to the sign-in
-   * page. Returning false aborts the write further down, after the OAuth
-   * callback has already committed to succeeding.
+   * Registering still grants nothing on its own. A new user has no
+   * `client.org_member` row, so `resolveAuthContext` yields no org and every
+   * /api route refuses them; membership stays a deliberate act
+   * (`pnpm cli grant-membership`).
    */
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
-          const allowlist = config.ALLOWED_SIGNUP_EMAILS;
-          if (allowlist.length === 0 || allowlist.includes('*')) return;
-
-          const email = user.email.trim().toLowerCase();
-          if (config.ALLOWED_SIGNUP_EMAILS.includes(email)) return;
-          if (await pendingInvitationFor(email)) return;
-
-          // Server-side only. Without this the rejection is undiagnosable —
-          // the browser is told an address was refused but never which one,
-          // and the address deliberately never reaches the client.
-          console.warn(
-            `sign-up refused for ${email} — not in ALLOWED_SIGNUP_EMAILS and holds no invitation`,
-          );
-          throw new APIError('FORBIDDEN', {
-            message: 'This email is not allowed to sign up yet.',
-          });
-        },
         after: async (user) => {
-          // An invited user joins the org that invited them. An allowlisted one
+          // An invited user joins the org that invited them. Everyone else
           // joins nothing: membership in an existing tenant is granted
           // deliberately, by `pnpm cli grant-membership`, never inherited by
           // being first through the door.
