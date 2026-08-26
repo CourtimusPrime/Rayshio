@@ -1,4 +1,4 @@
-import { CATEGORIES, CATEGORY_META, type Category } from '../categories.js';
+import { CATEGORIES, type Category } from '../categories.js';
 
 /**
  * The category instructions, built from the taxonomy rather than written out.
@@ -24,6 +24,8 @@ const HINTS: Record<Category, string> = {
     'metered requests, calls, events, observability ingest — consumption that is not compute, storage, network or model inference.',
   authentication: 'identity providers, SSO, MFA, secrets and key management.',
   subscriptions: 'flat recurring plan or per-seat licence fees, where nothing is metered.',
+  communications:
+    'reaching people: transactional and marketing email, SMS and voice, push notifications, telephony and video conferencing.',
 
   food: 'meals, catering, groceries, coffee.',
   transportation: 'taxis, rideshare, rail, car hire, fuel, parking.',
@@ -61,5 +63,9 @@ Category rules that matter:
   adjustment lines are "other"; tax and processing fees are "taxes_fees".
 - "subscriptions" is for a flat recurring charge with nothing metered. If the line
   names what is being consumed, prefer that category over "subscriptions".
+- "communications" is that same rule applied to messaging vendors: a Mailchimp or
+  Twilio plan is "communications", not "subscriptions", because the line names what
+  is being bought. Reserve "subscriptions" for a plan whose category is not otherwise
+  determinable.
 - For an opaque total ("Payment received", "Amount"), infer from the vendor when you
   can and fall back to "other" only when you cannot.`;

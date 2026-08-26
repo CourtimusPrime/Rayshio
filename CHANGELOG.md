@@ -45,6 +45,19 @@ Two consequences worth knowing before you run anything:
 
 ## 2026-08-26
 
+### Added
+
+- **`communications` category, marked with Lucide's `Megaphone`.** Messaging spend had nowhere honest to sit: an email-sending or SMS vendor landed in `subscriptions`, which is meant for a flat plan whose category cannot otherwise be determined. That put Mailchimp and Twilio next to unrelated per-seat licences and made "what do we pay to reach customers" unanswerable from the dashboard.
+
+  The taxonomy lives in four places that cannot import from each other — `src/categories.ts`, `web/src/types.ts`, the LLM enum, and a database CHECK constraint — so this touches all four plus the explicit Lucide map in `CategoryIcon.tsx`. `migrations/0014_communications_category.sql` widens the constraint; without it the classifier would emit a value every insert then rejected, which reads as a pipeline failure with no visible connection to a prompt edit.
+
+  The prompt gets an explicit disambiguation rule, because `subscriptions` and `communications` genuinely overlap: a Mailchimp plan is `communications`, since the line names what is being bought. **Existing rows are not backfilled** — re-filing them is a `client.category_rule`, which is retroactive by design and reversible.
+
+### Fixed
+
+- **`categories.test.ts` no longer hardcodes one migration filename.** It read `0012_category_taxonomy_v3.sql` directly, so the next migration to widen the taxonomy failed the test for the wrong reason — the constraint and the code agreed, but the assertion was checking a superseded file. It now scans `migrations/` for whichever migration defines `invoice_line_items_category_check` last, and slices to the Up section so the narrower CHECK restored by each Down section is never matched instead.
+- Dropped a dead `CATEGORY_META` import from `src/llm/category-prompt.ts`.
+
 ### Changed
 
 - **One origin variable replaces three URLs, and one Google OAuth client replaces two.** The environment shrank from 16 variables to 11. `GOOGLE_REDIRECT_URI`, `PUBLIC_MCP_URL` and `PUBLIC_APP_URL` all described the same deployment and had to be kept consistent by hand; nothing enforced that, so moving host meant remembering three edits and forgetting one failed a long way from its cause — an OAuth callback pointing at the previous host, or an MCP page telling users to connect to localhost. They are now derived from `VITE_PUBLIC_ORIGIN` (`publicOrigin`, `googleRedirectUri`, `publicMcpUrl` in `src/config.ts`).

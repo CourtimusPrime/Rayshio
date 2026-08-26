@@ -14,6 +14,7 @@ import {
   LampDeskIcon,
   LinkIcon,
   LockOpenIcon,
+  MegaphoneIcon,
   NotebookPenIcon,
   PlaneIcon,
   Share2Icon,
@@ -30,7 +31,7 @@ import { CATEGORY_META, type Category } from '../types';
  * An explicit map rather than `import * as icons from 'lucide-react'` and a
  * lookup by name. The namespace import defeats tree-shaking and pulls the
  * entire icon set — well over a thousand components — into the bundle to use
- * twenty-one of them. Naming each one costs a line and keeps the import
+ * twenty-two of them. Naming each one costs a line and keeps the import
  * graph honest.
  *
  * Keyed by the icon name in `CATEGORY_META` so the taxonomy stays the single
@@ -46,6 +47,7 @@ const ICONS: Record<string, LucideIcon> = {
   LockOpen: LockOpenIcon,
   Shield: ShieldIcon,
   CalendarSync: CalendarSyncIcon,
+  Megaphone: MegaphoneIcon,
   Utensils: UtensilsIcon,
   CarFront: CarFrontIcon,
   Plane: PlaneIcon,

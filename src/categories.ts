@@ -57,6 +57,7 @@ export const CATEGORY_META = {
   access: { label: 'Access', parent: 'technology', icon: 'LockOpen' },
   authentication: { label: 'Authentication', parent: 'technology', icon: 'Shield' },
   subscriptions: { label: 'Subscriptions', parent: 'technology', icon: 'CalendarSync' },
+  communications: { label: 'Communications', parent: 'technology', icon: 'Megaphone' },
 
   // -- Employee Expenses --
   food: { label: 'Food', parent: 'employee', icon: 'Utensils' },
