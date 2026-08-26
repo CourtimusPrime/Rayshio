@@ -157,15 +157,14 @@ function VendorChart({
           <Tooltip
             cursor={{ fill: chart.cursor }}
             contentStyle={chart.tooltip}
+            itemStyle={chart.tooltipItem}
             formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
           />
           <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
             {rows.map((entry) => (
               <Cell
                 key={entry.service}
-                fill={
-                  monochrome || entry.total_minor !== max ? chart.barMuted : chart.accent
-                }
+                fill={monochrome || entry.total_minor !== max ? chart.barMuted : chart.accent}
               />
             ))}
           </Bar>

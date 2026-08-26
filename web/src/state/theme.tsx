@@ -8,8 +8,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { flushSync } from 'react-dom';
 import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -64,6 +64,14 @@ export interface ChartColors {
     boxShadow: string;
     fontSize: number;
   };
+  /**
+   * Style for the tooltip's value rows, which Recharts styles *inline* as
+   * `color: entry.color || '#000'`. A `<Cell>` fill never reaches the tooltip
+   * payload, so that fallback fires and the numbers render black — invisible on
+   * the dark surface, and the reason this token exists rather than the rows
+   * simply inheriting `contentStyle`.
+   */
+  tooltipItem: { color: string };
 }
 
 interface ThemeValue {
@@ -109,6 +117,7 @@ function readChartColors(): ChartColors {
       boxShadow: style.getPropertyValue('--shadow-e3').trim(),
       fontSize: 12,
     },
+    tooltipItem: { color: colour('--ink-900') },
   };
 }
 

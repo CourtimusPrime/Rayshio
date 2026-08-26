@@ -1,3 +1,5 @@
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -8,8 +10,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { useState } from 'react';
 import { useReport } from '../api/hooks';
 import { categoryColors, categoryLabel } from '../categoryColors';
 import { AnimatedCount, AnimatedCurrency } from '../components/AnimatedNumber';
@@ -201,6 +201,7 @@ export function Reports() {
                     <Tooltip
                       cursor={{ fill: chart.cursor }}
                       contentStyle={chart.tooltip}
+                      itemStyle={chart.tooltipItem}
                       formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                     />
                     <Bar
@@ -289,6 +290,7 @@ export function Reports() {
                         <Tooltip
                           cursor={{ fill: chart.cursor }}
                           contentStyle={chart.tooltip}
+                          itemStyle={chart.tooltipItem}
                           formatter={(value: number) => [formatCurrency(value, currency), 'Spend']}
                         />
                         <Bar dataKey="total_minor" radius={[6, 6, 0, 0]} {...chartMotion}>
