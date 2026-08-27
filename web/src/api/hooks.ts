@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import type {
   AccountantSendResult,
   AccountantState,
+  SendMode,
   CategoriesResponse,
   DepartmentMode,
   InvoiceDetail,
@@ -443,8 +444,8 @@ export function useAccountant(currency: string | undefined) {
 export function useSetAccountantEmail() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (email: string | null) =>
-      apiSend<{ email: string | null }>('PUT', '/accountant', { email }),
+    mutationFn: (input: { email: string | null; send_mode?: SendMode }) =>
+      apiSend<{ email: string | null }>('PUT', '/accountant', input),
     /*
      * The address is what "outstanding" is measured against, so changing it
      * changes the count — refetch rather than patch the cache, since only the

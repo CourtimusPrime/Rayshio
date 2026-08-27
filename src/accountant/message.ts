@@ -139,3 +139,44 @@ export function htmlBody(input: MessageInput): string {
   const body = escapeHtml(textBody(input)).replace(/\n/g, '<br />');
   return `<div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a">${body}</div>`;
 }
+
+/**
+ * The covering note for a single invoice, sent on its own.
+ *
+ * Deliberately terse. In one-by-one mode the recipient is usually a filing
+ * inbox — Hubdoc, Dext, Xero — that reads the attachment and ignores the prose,
+ * and a human scanning three hundred of these wants the vendor, the date and
+ * the amount in the subject rather than a paragraph repeating them.
+ */
+export function singleInvoiceSubject(invoice: PackagedInvoice, workspaceName?: string): string {
+  const who = workspaceName ? `${workspaceName} — ` : '';
+  const number = invoice.invoice_number ? ` ${invoice.invoice_number}` : '';
+  return `${who}${invoice.service}${number} — ${invoice.effective_date}`;
+}
+
+export function singleInvoiceBody(
+  invoice: PackagedInvoice,
+  currency: string,
+  hasAttachment: boolean,
+): string {
+  const lines = [
+    `Service:  ${invoice.service}`,
+    `Date:     ${invoice.effective_date}`,
+    `Amount:   ${formatMinor(invoice.converted_value, currency)}`,
+  ];
+  if (invoice.invoice_number) lines.push(`Number:   ${invoice.invoice_number}`);
+  if (invoice.currency !== currency) {
+    lines.push(
+      `Billed:   ${formatMinor(invoice.value, invoice.currency)} — converted at the rate for ${invoice.effective_date}`,
+    );
+  }
+  lines.push('');
+  lines.push(
+    hasAttachment
+      ? `Attached: ${invoice.filename}`
+      : 'No document: this vendor billed in the body of the email, so the figures above are the whole record.',
+  );
+  lines.push('');
+  lines.push('Sent by Rayshio.');
+  return lines.join('\n');
+}

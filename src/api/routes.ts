@@ -33,6 +33,7 @@ import {
   clearAccountantEmail,
   recentDeliveries,
   setAccountantEmail,
+  setSendMode,
 } from '../queries/accountant.js';
 import {
   deleteCategoryRule,
@@ -1249,6 +1250,11 @@ export function apiRouter(): Router {
      * everything that address has already had.
      */
     email: z.string().email('enter a valid email address').nullable(),
+    /*
+     * Optional and independent of the address: the toggle changes only this,
+     * and saving an address must not silently reset how it is delivered.
+     */
+    send_mode: z.enum(['bulk', 'individual']).optional(),
   });
 
   router.put('/accountant', async (req, res) => {
@@ -1260,10 +1266,15 @@ export function apiRouter(): Router {
     const email = parsed.data.email?.trim().toLowerCase() ?? null;
     if (email === null) {
       await clearAccountantEmail(orgId);
-    } else {
-      await setAccountantEmail(orgId, email);
+      res.json({ email: null, send_mode: 'bulk' });
+      return;
     }
-    res.json({ email });
+
+    await setAccountantEmail(orgId, email);
+    // After the upsert, never before: the row is keyed on the org and `email`
+    // is NOT NULL, so a mode has nowhere to live until an address exists.
+    if (parsed.data.send_mode) await setSendMode(orgId, parsed.data.send_mode);
+    res.json({ email, send_mode: parsed.data.send_mode ?? undefined });
   });
 
   router.post('/accountant/send', async (req, res) => {

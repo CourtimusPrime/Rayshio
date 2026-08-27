@@ -367,10 +367,20 @@ export interface AccountantDelivery {
  */
 export type SendBlocker = 'no_mailbox' | 'mailbox_revoked' | 'missing_send_scope';
 
+/**
+ * How invoices reach the accountant. `bulk` is one message carrying a zip of
+ * everything outstanding; `individual` is one message per invoice with that
+ * invoice's PDF attached directly — which is what a filing inbox (Hubdoc,
+ * Dext, Xero) needs, since those read one attachment per message and cannot
+ * see inside a zip.
+ */
+export type SendMode = 'bulk' | 'individual';
+
 export interface AccountantState {
   recipient: string | null;
   /** The mailbox invoices go out from — the user's own connected account. */
   sender: string | null;
+  send_mode: SendMode;
   can_send: boolean;
   blocker: SendBlocker | null;
   summary: AccountantSummary;
@@ -381,6 +391,7 @@ export interface AccountantState {
 }
 
 export interface AccountantSendResult {
+  mode: SendMode;
   recipient: string;
   sender: string;
   delivery_id: number;

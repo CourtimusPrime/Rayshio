@@ -10,21 +10,51 @@
  * outstanding.
  */
 
-import { GmailSendScopeMissingError, grantCanSend, sendAsAccount } from '../gmail/send.js';
+import {
+  GmailSendError,
+  GmailSendScopeMissingError,
+  grantCanSend,
+  sendAsAccount,
+} from '../gmail/send.js';
 import { getPdf } from '../mongo/pdfs.js';
 import {
+  type SendMode,
   type UntrackedInvoice,
-  getAccountantEmail,
+  finishDelivery,
+  getAccountantSettings,
+  recordDeliveredItem,
   recordDelivery,
   recordFailedDelivery,
   sendingAccount,
+  startDelivery,
   untrackedInvoices,
 } from '../queries/accountant.js';
 import { ConversionTracker, converterFor } from '../queries/converted.js';
 import { getOrg } from '../queries/meta.js';
-import { htmlBody, subjectFor, textBody } from './message.js';
-import { archiveFilename, buildPackage, summarize } from './package.js';
-import type { PackageSummary } from './package.js';
+import {
+  htmlBody,
+  singleInvoiceBody,
+  singleInvoiceSubject,
+  subjectFor,
+  textBody,
+} from './message.js';
+import { archiveFilename, buildPackage, invoiceFilename, summarize } from './package.js';
+import type { PackageSummary, PackagedInvoice } from './package.js';
+
+/**
+ * Invoices per press in one-by-one mode.
+ *
+ * Far below the bulk ceiling of 150, and the limit is Gmail rather than us:
+ * `messages.send` costs 100 quota units against a 250-per-second per-user
+ * budget, so sustained sending is about two messages a second. Twenty-five is
+ * roughly fifteen seconds of work — long enough to be worth doing, short enough
+ * that the request is in no danger of a gateway timeout. The rest defers, and
+ * the tab says how many are left.
+ */
+export const MAX_INDIVIDUAL_PER_SEND = 25;
+
+/** Spacing between individual sends, to stay inside Gmail's per-second quota. */
+const SEND_INTERVAL_MS = 500;
 
 export class NoRecipientError extends Error {}
 export class NothingToSendError extends Error {}
@@ -45,6 +75,7 @@ export interface OutstandingPreview {
   recipient: string | null;
   /** The address a send goes out from — the user's own connected mailbox. */
   sender: string | null;
+  send_mode: SendMode;
   can_send: boolean;
   blocker: SendBlocker | null;
   summary: PackageSummary;
@@ -95,12 +126,17 @@ async function sendability(orgId: number) {
 
 /** What the tab shows before anyone presses send. */
 export async function outstanding(orgId: number, currency: string): Promise<OutstandingPreview> {
-  const [recipient, sendable] = await Promise.all([getAccountantEmail(orgId), sendability(orgId)]);
+  const [settings, sendable] = await Promise.all([
+    getAccountantSettings(orgId),
+    sendability(orgId),
+  ]);
+  const recipient = settings.email;
 
   if (!recipient) {
     return {
       recipient: null,
       sender: sendable.sender,
+      send_mode: settings.sendMode,
       can_send: sendable.blocker === null,
       blocker: sendable.blocker,
       summary: {
@@ -135,6 +171,7 @@ export async function outstanding(orgId: number, currency: string): Promise<Outs
   return {
     recipient,
     sender: sendable.sender,
+    send_mode: settings.sendMode,
     can_send: sendable.blocker === null,
     blocker: sendable.blocker,
     summary: summarize(packaged, currency),
@@ -144,6 +181,7 @@ export async function outstanding(orgId: number, currency: string): Promise<Outs
 }
 
 export interface SendResult {
+  mode: SendMode;
   recipient: string;
   /** The mailbox it was sent from, which is also where it now sits in Sent. */
   sender: string;
@@ -171,12 +209,16 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
   }
   const accountId = sendable.accountId;
 
-  const recipient = await getAccountantEmail(orgId);
+  const { email: recipient, sendMode } = await getAccountantSettings(orgId);
   if (!recipient) throw new NoRecipientError('no accountant address is set for this workspace');
 
   const invoices = await untrackedInvoices(orgId, recipient);
   if (invoices.length === 0) {
     throw new NothingToSendError(`${recipient} already has every invoice`);
+  }
+
+  if (sendMode === 'individual') {
+    return sendOneByOne({ orgId, accountId, recipient, currency, invoices });
   }
 
   const [{ converted, meta }, org] = await Promise.all([
@@ -238,11 +280,108 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
   });
 
   return {
+    mode: 'bulk',
     recipient,
     sender: sendable.sender ?? '',
     delivery_id: deliveryId,
     summary: pkg.summary,
     deferred_count: pkg.deferred.length,
     without_pdf_count: pkg.withoutPdf.length,
+  };
+}
+
+/**
+ * One email per invoice, its own PDF attached rather than zipped.
+ *
+ * The mode exists for filing inboxes — Hubdoc, Dext, Xero — which read one
+ * attachment per message and cannot see inside a zip at all. A single bulk
+ * message to one of those files as a single unreadable document, or nothing.
+ *
+ * Each invoice is recorded the instant its own message is accepted, rather than
+ * all of them at the end. That is the whole difference from bulk: here the
+ * twentieth send can fail after nineteen have arrived, and those nineteen must
+ * stay delivered or the accountant receives them again on the retry. A failure
+ * therefore stops the run and keeps what already went — it does not roll back.
+ */
+async function sendOneByOne(input: {
+  orgId: number;
+  accountId: number;
+  recipient: string;
+  currency: string;
+  invoices: UntrackedInvoice[];
+}): Promise<SendResult> {
+  const { orgId, accountId, recipient, currency } = input;
+  const { converted } = await convert(input.invoices, currency);
+  const batch = converted.slice(0, MAX_INDIVIDUAL_PER_SEND);
+
+  const deliveryId = await startDelivery({ orgId, recipient, currency });
+
+  const sent: PackagedInvoice[] = [];
+  let withoutPdf = 0;
+  let failure: string | null = null;
+
+  for (const [index, invoice] of batch.entries()) {
+    const packaged: PackagedInvoice = { ...invoice, filename: invoiceFilename(invoice) };
+
+    let pdf: Buffer | undefined;
+    if (invoice.pdf_id) {
+      try {
+        pdf = await getPdf(invoice.pdf_id);
+      } catch {
+        // The row points at a blob that is gone. Send the figures rather than
+        // holding the invoice back forever over a missing attachment.
+        pdf = undefined;
+      }
+    }
+    if (!pdf) withoutPdf += 1;
+
+    try {
+      // Spacing, not throttling after the fact: messages.send costs 100 of
+      // Gmail's 250 per-second quota units, so back to back this would start
+      // returning 429s partway through a run.
+      if (index > 0) await new Promise((resolve) => setTimeout(resolve, SEND_INTERVAL_MS));
+
+      await sendAsAccount(accountId, {
+        to: recipient,
+        subject: singleInvoiceSubject(packaged, undefined),
+        text: singleInvoiceBody(packaged, currency, Boolean(pdf)),
+        attachments: pdf
+          ? [{ filename: packaged.filename, content: pdf, mimeType: 'application/pdf' }]
+          : [],
+      });
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+      break;
+    }
+
+    // After the send, never before: recording first would mark an invoice
+    // delivered that a bounce swallowed.
+    await recordDeliveredItem(deliveryId, invoice.invoice_id, recipient);
+    sent.push(packaged);
+  }
+
+  const summary = summarize(sent, currency);
+  await finishDelivery(deliveryId, {
+    invoiceCount: summary.invoice_count,
+    serviceCount: summary.service_count,
+    periodStart: summary.period_start,
+    periodEnd: summary.period_end,
+    totalMinor: summary.total_minor,
+    error: failure,
+  });
+
+  // A run that sent nothing at all is a failure the user has to see; one that
+  // stopped partway is reported through the counts, with the remainder simply
+  // still outstanding.
+  if (sent.length === 0 && failure) throw new GmailSendError(failure);
+
+  return {
+    mode: 'individual',
+    recipient,
+    sender: (await sendingAccount(orgId))?.email_address ?? '',
+    delivery_id: deliveryId,
+    summary,
+    deferred_count: input.invoices.length - sent.length,
+    without_pdf_count: withoutPdf,
   };
 }

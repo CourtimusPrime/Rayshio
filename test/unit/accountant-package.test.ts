@@ -1,6 +1,12 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
-import { serviceLines, subjectFor, textBody } from '../../src/accountant/message.js';
+import {
+  serviceLines,
+  singleInvoiceBody,
+  singleInvoiceSubject,
+  subjectFor,
+  textBody,
+} from '../../src/accountant/message.js';
 import {
   archiveFilename,
   buildPackage,
@@ -280,5 +286,46 @@ describe('covering note', () => {
     expect(subjectFor({ ...message, workspaceName: 'NCZ' })).toBe(
       'NCZ — 3 invoices, 2026-01-05 to 2026-03-20',
     );
+  });
+});
+
+describe('single-invoice message (one-by-one mode)', () => {
+  const invoice = packaged({
+    invoice_id: 7,
+    service: 'Cloudflare',
+    invoice_number: 'IN76697571',
+    effective_date: '2026-08-26',
+    currency: 'USD',
+    value: 2016,
+    converted_value: 1479,
+  });
+
+  it('puts vendor, number and date in the subject, where a filing inbox reads them', () => {
+    expect(singleInvoiceSubject(invoice)).toBe('Cloudflare IN76697571 — 2026-08-26');
+    expect(singleInvoiceSubject(invoice, 'NCZ')).toBe('NCZ — Cloudflare IN76697571 — 2026-08-26');
+  });
+
+  it('survives an invoice with no number', () => {
+    expect(singleInvoiceSubject(packaged({ service: 'Serper', invoice_number: null }))).toBe(
+      'Serper — 2026-03-15',
+    );
+  });
+
+  it('states the original amount when it was converted', () => {
+    const body = singleInvoiceBody(invoice, 'GBP', true);
+    expect(body).toContain('14.79 GBP');
+    // the vendor's own figure, so the accountant can tie it to the document
+    expect(body).toContain('20.16 USD');
+  });
+
+  it('says nothing about conversion when none happened', () => {
+    const body = singleInvoiceBody(packaged({ currency: 'GBP', value: 500 }), 'GBP', true);
+    expect(body).not.toContain('converted at the rate');
+  });
+
+  it('explains an invoice sent without a document', () => {
+    const body = singleInvoiceBody(invoice, 'GBP', false);
+    expect(body).toContain('No document');
+    expect(body).not.toContain('Attached:');
   });
 });

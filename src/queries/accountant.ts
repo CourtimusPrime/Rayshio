@@ -35,6 +35,8 @@ export async function sendingAccount(orgId: number) {
   return active ? { ...active, id: Number(active.id) } : undefined;
 }
 
+export type SendMode = 'bulk' | 'individual';
+
 export async function getAccountantEmail(orgId: number): Promise<string | null> {
   const row = await db
     .selectFrom('client.accountant')
@@ -42,6 +44,33 @@ export async function getAccountantEmail(orgId: number): Promise<string | null> 
     .where('org_id', '=', orgId)
     .executeTakeFirst();
   return row?.email ?? null;
+}
+
+export async function getAccountantSettings(
+  orgId: number,
+): Promise<{ email: string | null; sendMode: SendMode }> {
+  const row = await db
+    .selectFrom('client.accountant')
+    .select(['email', 'send_mode'])
+    .where('org_id', '=', orgId)
+    .executeTakeFirst();
+  return {
+    email: row?.email ?? null,
+    sendMode: (row?.send_mode as SendMode | undefined) ?? 'bulk',
+  };
+}
+
+/**
+ * Sets how invoices are delivered. Requires an address, because the row is
+ * keyed on the org and `email` is NOT NULL — a mode with nobody to send to is
+ * not a state this table can hold, and the UI never offers it.
+ */
+export async function setSendMode(orgId: number, mode: SendMode): Promise<void> {
+  await db
+    .updateTable('client.accountant')
+    .set({ send_mode: mode, updated_at: sql`now()` })
+    .where('org_id', '=', orgId)
+    .execute();
 }
 
 /**
@@ -205,6 +234,85 @@ export async function recordDelivery(input: RecordDeliveryInput): Promise<number
 
     return Number(delivery.id);
   });
+}
+
+/**
+ * Opens a delivery that will be filled in as individual emails land.
+ *
+ * One-by-one sending cannot use `recordDelivery`, which writes everything in
+ * one transaction after a single message is accepted. Here each email is its
+ * own outcome: the twentieth can fail after nineteen have arrived, and those
+ * nineteen must stay delivered or the accountant gets them twice on the retry.
+ * So the parent row is opened first — the items reference it — and each invoice
+ * is recorded the moment its own message is accepted.
+ */
+export async function startDelivery(input: {
+  orgId: number;
+  recipient: string;
+  currency: string;
+}): Promise<number> {
+  const row = await db
+    .insertInto('billing.accountant_delivery')
+    .values({
+      org_id: input.orgId,
+      recipient: input.recipient,
+      currency: input.currency,
+      status: 'sent',
+      invoice_count: 0,
+      service_count: 0,
+      total_minor: 0,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return Number(row.id);
+}
+
+/** Marks one invoice delivered, immediately after its own email is accepted. */
+export async function recordDeliveredItem(
+  deliveryId: number,
+  invoiceId: number,
+  recipient: string,
+): Promise<void> {
+  await db
+    .insertInto('billing.accountant_delivery_item')
+    .values({ delivery_id: deliveryId, invoice_id: invoiceId, recipient })
+    .onConflict((oc) => oc.columns(['invoice_id', 'recipient']).doNothing())
+    .execute();
+}
+
+/**
+ * Closes a run, with the totals of what actually went out.
+ *
+ * Written at the end rather than predicted at the start: the counts have to
+ * describe delivered mail, not intended mail, or the history reports a batch
+ * that partly failed as though it had all arrived.
+ */
+export async function finishDelivery(
+  deliveryId: number,
+  totals: {
+    invoiceCount: number;
+    serviceCount: number;
+    periodStart: string | null;
+    periodEnd: string | null;
+    totalMinor: number;
+    error?: string | null;
+  },
+): Promise<void> {
+  await db
+    .updateTable('billing.accountant_delivery')
+    .set({
+      invoice_count: totals.invoiceCount,
+      service_count: totals.serviceCount,
+      period_start: totals.periodStart,
+      period_end: totals.periodEnd,
+      total_minor: totals.totalMinor,
+      // A run that delivered nothing at all is a failure; one that delivered
+      // some and then stopped is not, because that mail really did arrive.
+      status: totals.invoiceCount === 0 && totals.error ? 'failed' : 'sent',
+      error: totals.error ? totals.error.slice(0, 500) : null,
+    })
+    .where('id', '=', deliveryId)
+    .execute();
 }
 
 /**

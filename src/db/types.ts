@@ -122,6 +122,10 @@ export interface ClientAccount {
 export interface ClientAccountant {
   email: string;
   org_id: Int8;
+  /**
+   * bulk: one zip of everything outstanding. individual: one email per invoice, PDF attached directly
+   */
+  send_mode: Generated<string>;
   updated_at: Generated<Timestamp>;
 }
 

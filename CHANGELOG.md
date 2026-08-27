@@ -47,6 +47,16 @@ Two consequences worth knowing before you run anything:
 
 ### Changed
 
+- **The Accountant tab can send one email per invoice instead of one zip.** A Bulk send / One-by-one toggle beside the send button, stored per workspace (`migrations/0017_accountant_send_mode.sql`).
+
+  The mode exists because a filing inbox is not a person. Hubdoc, Dext and Xero read one attachment per message and cannot open a zip at all, so a bulk send to one of them files as a single unreadable document or as nothing. A human accountant, conversely, would rather have one email a month than three hundred. It is stored rather than chosen per send because it is a property of the recipient — the answer never changes between sends.
+
+  **One-by-one records each invoice the moment its own message is accepted**, not all of them at the end. That is the real difference from bulk, and it is what makes a partial run safe: the twentieth send can fail after nineteen have arrived, and those nineteen must stay delivered or the accountant receives them again on the retry. A failure stops the run and keeps what went; the remainder is simply still outstanding. `startDelivery` / `recordDeliveredItem` / `finishDelivery` replace the single-transaction `recordDelivery` for this path, and the run's totals describe delivered mail rather than intended mail.
+
+  Twenty-five invoices per press, against bulk's 150. The limit is Gmail: `messages.send` costs 100 of a 250-per-second per-user quota, so sustained sending is about two messages a second, and the sends are spaced 500 ms apart rather than fired back to back — without that a long run starts returning 429s partway through. Twenty-five is roughly fifteen seconds, which keeps the request clear of a gateway timeout.
+
+  The toggle wraps onto its own row below `md`: at 390px it and the send button did not fit on one line, and letting them shrink pushed the card past the viewport by up to 14px. Caught by the render checks, which assert nothing overflows horizontally at any width.
+
 - **Tables show a Type column instead of Status.** Receipt (yellow, `ReceiptText`), Invoice (green, `Banknote`) and Email (red, `Mail`), on the Invoices page and the dashboard's recent list — both render through `InvoiceTable`, so this is one change in one place.
 
   Status answered a question about our own ingestion — `parsed`, `pending`, `failed` — which matters when something breaks and is noise the rest of the time, since almost every row says `parsed`. Type answers what a person reconciling spend actually asks: is there a document behind this figure, and is it a bill or proof of payment. The status filter above the table is untouched, and the drawer still shows status beside its failure reason, where it earns its place.

@@ -10,10 +10,30 @@ import { AnimatedCount, AnimatedCurrency } from '../components/AnimatedNumber';
 import { ServiceLogo } from '../components/ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingBlock } from '../components/states';
 import { useWorkspace } from '../state/workspace';
-import type { AccountantDelivery, AccountantSummary, SendBlocker } from '../types';
+import type { AccountantDelivery, AccountantSummary, SendBlocker, SendMode } from '../types';
 import { formatCurrency, formatDate, formatRelativeTime } from '../utils/format';
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-card';
+
+/**
+ * Invoices per press in one-by-one mode; mirrors MAX_INDIVIDUAL_PER_SEND on the
+ * server. Duplicated rather than fetched because it only labels a button — and
+ * a stale label is a smaller problem than an extra round trip on every render.
+ */
+const INDIVIDUAL_BATCH = 25;
+
+const SEND_MODES: { value: SendMode; label: string; hint: string }[] = [
+  {
+    value: 'bulk',
+    label: 'Bulk send',
+    hint: 'One email with every outstanding invoice zipped together.',
+  },
+  {
+    value: 'individual',
+    label: 'One-by-one',
+    hint: 'One email per invoice, each PDF attached directly — what filing inboxes like Hubdoc, Dext and Xero expect, since they read one attachment per message and cannot open a zip.',
+  },
+];
 
 /**
  * Each reason sending is unavailable, and the one action that fixes it.
@@ -81,14 +101,23 @@ export function Accountant() {
               {data.recipient
                 ? `Never sent to ${data.recipient}. Each invoice goes out once — sending marks these as delivered, so the next batch starts empty.`
                 : 'Set an address above to see what is waiting to be sent.'}
+              {data.recipient && data.send_mode === 'individual'
+                ? ` One email per invoice, ${INDIVIDUAL_BATCH} at a time.`
+                : ''}
             </p>
           </div>
+
+          {/* Wraps rather than shrinking: at 390px the toggle and the button
+              do not fit on one line, and squeezing them pushed the card past
+              the viewport. The toggle takes its own row there instead. */}
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap md:gap-3">
+            <SendModeToggle mode={data.send_mode} recipient={data.recipient} />
 
           <button
             type="button"
             disabled={!canSend || send.isPending}
             onClick={() => send.mutate(currency)}
-            className="press flex h-10 shrink-0 items-center gap-2 rounded-lg bg-accent px-4 text-footnote font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-50"
+            className="press ml-auto flex h-10 shrink-0 items-center gap-2 rounded-lg bg-accent px-4 text-footnote font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {send.isPending ? (
               <Loader2Icon className="h-4 w-4 animate-spin" strokeWidth={1.75} />
@@ -99,8 +128,11 @@ export function Accountant() {
               ? 'Sending…'
               : outstanding === 0
                 ? 'Nothing to send'
-                : `Send ${outstanding} invoice${outstanding === 1 ? '' : 's'}`}
+                : data.send_mode === 'individual'
+                  ? `Send ${Math.min(outstanding, INDIVIDUAL_BATCH)} email${Math.min(outstanding, INDIVIDUAL_BATCH) === 1 ? '' : 's'}`
+                  : `Send ${outstanding} invoice${outstanding === 1 ? '' : 's'}`}
           </button>
+          </div>
         </div>
 
         <OutstandingFigures summary={data.summary} />
@@ -135,7 +167,12 @@ export function Accountant() {
             <span>
               Sent {send.data.summary.invoice_count} invoice
               {send.data.summary.invoice_count === 1 ? '' : 's'} to {send.data.recipient} from{' '}
-              {send.data.sender} — it is in your Gmail Sent folder.
+              {send.data.sender}
+              {send.data.mode === 'individual'
+                ? ` as ${send.data.summary.invoice_count === 1 ? 'one email' : 'separate emails'}`
+                : ''}{' '}
+              — {send.data.summary.invoice_count === 1 ? 'it is' : "they are"} in your Gmail Sent
+              folder.
               {send.data.deferred_count > 0 &&
                 ` ${send.data.deferred_count} did not fit in one message and are still outstanding — send again to deliver them.`}
             </span>
@@ -169,6 +206,49 @@ export function Accountant() {
       </section>
 
       <DeliveryHistory deliveries={data.deliveries} />
+    </div>
+  );
+}
+
+/**
+ * Bulk or one-by-one.
+ *
+ * A property of the recipient rather than a choice made per send: a filing
+ * inbox always wants one document per message, a human accountant always wants
+ * one email — so it is stored, and asking on every send would be asking a
+ * question whose answer never changes.
+ */
+function SendModeToggle({ mode, recipient }: { mode: SendMode; recipient: string | null }) {
+  const save = useSetAccountantEmail();
+  // The mode lives on the same row as the address, which is NOT NULL — there is
+  // nowhere to store it until an address exists.
+  const disabled = !recipient || save.isPending;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="How invoices are sent"
+      className="flex min-w-0 rounded-lg border border-line bg-canvas p-0.5"
+    >
+      {SEND_MODES.map((option) => {
+        const active = option.value === mode;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            title={option.hint}
+            disabled={disabled}
+            onClick={() => !active && save.mutate({ email: recipient, send_mode: option.value })}
+            className={`press whitespace-nowrap rounded-md px-2.5 py-1.5 text-footnote font-medium transition-colors disabled:opacity-50 md:px-3 ${
+              active ? 'bg-surface text-ink-900 shadow-e1' : 'text-ink-500 hover:text-ink-900'
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -252,7 +332,7 @@ function RecipientCard({
         onSubmit={(event) => {
           event.preventDefault();
           if (!dirty) return;
-          save.mutate(trimmed === '' ? null : trimmed);
+          save.mutate({ email: trimmed === '' ? null : trimmed });
         }}
       >
         <label className="min-w-0 flex-1">
