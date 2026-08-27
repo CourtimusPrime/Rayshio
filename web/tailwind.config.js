@@ -100,6 +100,11 @@ export default {
           text: token('--warn-text'),
           solid: token('--warn-solid'),
         },
+        success: {
+          soft: token('--success-soft'),
+          text: token('--success-text'),
+          solid: token('--success-solid'),
+        },
         danger: {
           soft: token('--danger-soft'),
           text: token('--danger-text'),

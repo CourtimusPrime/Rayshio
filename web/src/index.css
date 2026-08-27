@@ -48,6 +48,12 @@
   --warn-soft: 255 251 235; /* #fffbeb */
   --warn-text: 180 83 9; /* #b45309 */
   --warn-solid: 245 158 11; /* #f59e0b */
+  /* Green, for a document that settles a charge rather than requests one.
+     Same three-tier shape as warn and danger: a tinted background, a text
+     colour that clears AA on it, and a solid for dots and marks. */
+  --success-soft: 240 253 244; /* #f0fdf4 */
+  --success-text: 21 128 61; /* #15803d */
+  --success-solid: 34 197 94; /* #22c55e */
   --danger-soft: 254 242 242; /* #fef2f2 */
   --danger-text: 190 18 60; /* #be123c */
   --danger-solid: 244 63 94; /* #f43f5e */
@@ -182,6 +188,9 @@
   --warn-soft: 42 32 16; /* #2a2010 */
   --warn-text: 251 191 36; /* #fbbf24 */
   --warn-solid: 245 158 11; /* #f59e0b */
+  --success-soft: 16 38 25; /* #102619 */
+  --success-text: 134 239 172; /* #86efac */
+  --success-solid: 34 197 94; /* #22c55e */
   --danger-soft: 44 20 24; /* #2c1418 */
   --danger-text: 253 164 175; /* #fda4af */
   --danger-solid: 244 63 94; /* #f43f5e */

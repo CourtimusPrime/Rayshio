@@ -47,6 +47,16 @@ Two consequences worth knowing before you run anything:
 
 ### Changed
 
+- **Tables show a Type column instead of Status.** Receipt (yellow, `ReceiptText`), Invoice (green, `Banknote`) and Email (red, `Mail`), on the Invoices page and the dashboard's recent list — both render through `InvoiceTable`, so this is one change in one place.
+
+  Status answered a question about our own ingestion — `parsed`, `pending`, `failed` — which matters when something breaks and is noise the rest of the time, since almost every row says `parsed`. Type answers what a person reconciling spend actually asks: is there a document behind this figure, and is it a bill or proof of payment. The status filter above the table is untouched, and the drawer still shows status beside its failure reason, where it earns its place.
+
+  **Derived, not stored** (`src/queries/document-type.ts`). Nothing in the extraction schema records a document type, so a column would be null for every existing row and could only be filled by re-running extraction over the whole table. The rule reads the two signals already present: no PDF is `email`, a subject announcing a receipt is `receipt`, anything else with a PDF is `invoice` — which covers manual uploads, whose subject is a filename and carries no signal at all. On this workspace's 336 invoices that splits 182 email, 108 invoice, 46 receipt. It can be replaced by a real extracted field later without changing what the API returns.
+
+  `\b` treats `@` as a word boundary, so a plain `\breceipts?\b` matched the address in "Invoice from receipts@vendor.com" and filed an ordinary invoice as a receipt. A test caught it; the pattern now carries a `(?!@)` lookahead.
+
+  **`BanknoteCheck` does not exist in Lucide** — not in the installed 0.577, not in 1.34 either — so Invoice uses `Banknote`. Adding it also needed a green: `success` (soft/text/solid) now sits beside `warn` and `danger` in `index.css` and `tailwind.config.js`, which means **the Vite dev server must be restarted** or the new utilities silently resolve to nothing. Contrast measured in the browser: 4.8:1 light, 11.4:1 dark, all three badges clearing AA in both themes.
+
 - **The Accountant tab sends through the signed-in Gmail account; Resend is gone.** Invoices now leave from the user's own mailbox — the message lands in their Sent folder, replies come back to them, and the accountant sees an address they already correspond with rather than a machine sender on a domain they have never heard of. `RESEND_API_KEY`, `MAIL_FROM` and `src/email/` are deleted; nothing else in the product needed a verified sending domain or a second vendor holding a copy of the invoices.
 
   **This adds a restricted scope.** `gmail.send` sits alongside `gmail.readonly` on the consent screen, so it has to be declared in the Google verification submission — the dependency the milestone already calls out as the launch gate. `gmail.send`, not `gmail.compose`: compose can also create and modify drafts, which this app never does, and a restricted scope has to be justified on exactly what it is used for.

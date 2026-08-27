@@ -2,7 +2,7 @@ import { categoryLabel } from '../categoryColors';
 import type { InvoiceRow } from '../types';
 import { formatCurrency, formatDate } from '../utils/format';
 import { ServiceLogo } from './ServiceLogo';
-import { StatusBadge } from './StatusBadge';
+import { TypeBadge } from './TypeBadge';
 
 const headerClass = 'px-5 py-2.5 text-micro font-medium uppercase tracking-wide text-ink-400';
 
@@ -44,7 +44,7 @@ export function InvoiceTable({
               Date
             </th>
             <th scope="col" className={`${headerClass} md:px-6`}>
-              Status
+              Type
             </th>
           </tr>
         </thead>
@@ -108,7 +108,7 @@ export function InvoiceTable({
                   : formatDate(invoice.delivered_at.slice(0, 10))}
               </td>
               <td className="px-5 py-3.5 md:px-6">
-                <StatusBadge status={invoice.status} />
+                <TypeBadge type={invoice.type} />
               </td>
             </tr>
           ))}

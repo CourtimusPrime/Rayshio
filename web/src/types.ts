@@ -215,6 +215,13 @@ export interface ServiceCategoriesResponse {
   conversion: ConversionMeta;
 }
 
+/**
+ * What kind of document a row came from, as opposed to how far it got through
+ * ingestion (`DisplayStatus`). Derived server-side; see
+ * `src/queries/document-type.ts` for the rule.
+ */
+export type DocumentType = 'invoice' | 'receipt' | 'email';
+
 export interface InvoiceRow {
   invoice_id: number;
   service: string;
@@ -228,6 +235,7 @@ export interface InvoiceRow {
   is_converted: boolean;
   invoice_date: string | null;
   status: DisplayStatus;
+  type: DocumentType;
   delivered_at: string;
   category: Category;
 }
@@ -263,6 +271,7 @@ export interface InvoiceDetail {
   period_start: string | null;
   period_end: string | null;
   status: DisplayStatus;
+  type: DocumentType;
   raw_status: string;
   failure_reason: string | null;
   email_subject: string | null;

@@ -51,6 +51,7 @@ import {
   totalsByService,
   totalsByServiceCategory,
 } from '../queries/converted.js';
+import { classifyDocumentType } from '../queries/document-type.js';
 import { invoiceFacts, lineItemFacts } from '../queries/facts.js';
 import {
   type PeriodType,
@@ -800,6 +801,8 @@ export function apiRouter(): Router {
           is_converted: row.currency !== currency,
           invoice_date: row.invoice_date,
           status: displayStatus(row.status),
+          /** invoice | receipt | email — see src/queries/document-type.ts. */
+          type: row.type,
           delivered_at: row.delivered_at,
           category: normalizeCategory(categories.get(Number(row.invoice_id))),
         };
@@ -881,6 +884,10 @@ export function apiRouter(): Router {
       period_start: invoice.period_start,
       period_end: invoice.period_end,
       status: displayStatus(invoice.status),
+      type: classifyDocumentType({
+        pdfId: invoice.pdf_id,
+        subject: invoice.email_subject,
+      }),
       raw_status: invoice.status,
       failure_reason: invoice.failure_reason,
       email_subject: invoice.email_subject,

@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { db } from '../db/client.js';
 import { effectiveCategory } from './category-rules.js';
+import { type DocumentType, classifyDocumentType } from './document-type.js';
 import { type DateRange, dateAtLeast, dateAtMost } from './filters.js';
 import { displayName } from './service-name.js';
 import { keepsZeroCharges } from './zero-charges.js';
@@ -17,6 +18,11 @@ export interface InvoiceListRow {
   period_end: string | null;
   status: string;
   delivered_at: Date;
+  /**
+   * Appended, never inserted. The field order above is the MCP `list_invoices`
+   * wire shape, so an existing client reading positionally keeps working.
+   */
+  type: DocumentType;
 }
 
 export interface ListInvoicesOptions extends DateRange {
@@ -76,6 +82,8 @@ export async function listInvoices(
       'billing.invoices.period_end',
       'billing.invoices.status',
       'billing.email.delivered_at',
+      'billing.email.subject',
+      sql<string | null>`billing.invoices.pdf_id::text`.as('pdf_id'),
     ])
     // Not every invoice carries an invoice_date, and a plain `invoice_date DESC`
     // sorts those NULLs *first* in Postgres — which parked the oldest undated
@@ -86,7 +94,11 @@ export async function listInvoices(
     .$if(opts.limit !== undefined, (qb) => qb.limit(opts.limit as number))
     .$if(opts.offset !== undefined, (qb) => qb.offset(opts.offset as number))
     .execute();
-  return rows as unknown as InvoiceListRow[];
+
+  return rows.map((row) => ({
+    ...row,
+    type: classifyDocumentType({ pdfId: row.pdf_id, subject: row.subject }),
+  })) as unknown as InvoiceListRow[];
 }
 
 export async function countInvoices(
