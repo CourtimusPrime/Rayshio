@@ -466,3 +466,27 @@ export function useSendToAccountant() {
     },
   });
 }
+
+/**
+ * Starts the Gmail consent flow.
+ *
+ * A mutation rather than a query because it has a moment: the URL is minted
+ * with a signed, time-limited state, so fetching it on render would hand the
+ * user a link that had already expired by the time they pressed it.
+ */
+export function useGmailConsentUrl() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiGet<{ url: string }>('/gmail/consent-url'),
+    /*
+     * Consent happens in another tab, so nothing here can observe it finishing.
+     * Marking the accountant state stale means returning to this tab refetches
+     * and the warning disappears on its own — rather than persisting until a
+     * reload and reading as "the reconnect did not work".
+     */
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['accountant'] });
+      void queryClient.invalidateQueries({ queryKey: ['meta'] });
+    },
+  });
+}

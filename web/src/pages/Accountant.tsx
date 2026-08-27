@@ -1,6 +1,11 @@
-import { AlertTriangleIcon, CheckIcon, Loader2Icon, SendIcon } from 'lucide-react';
+import { AlertTriangleIcon, CheckIcon, Loader2Icon, MailIcon, SendIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useAccountant, useSendToAccountant, useSetAccountantEmail } from '../api/hooks';
+import {
+  useAccountant,
+  useGmailConsentUrl,
+  useSendToAccountant,
+  useSetAccountantEmail,
+} from '../api/hooks';
 import { AnimatedCount, AnimatedCurrency } from '../components/AnimatedNumber';
 import { ServiceLogo } from '../components/ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingBlock } from '../components/states';
@@ -18,6 +23,12 @@ const CARD = 'rounded-xl border border-line bg-surface shadow-card';
  * reconnect a revoked one, or reconnect one that pre-dates sending and so was
  * only ever granted permission to read.
  */
+const BLOCKER_ACTION: Record<SendBlocker, string> = {
+  no_mailbox: 'Enable Gmail',
+  mailbox_revoked: 'Reconnect Gmail',
+  missing_send_scope: 'Enable Gmail',
+};
+
 const BLOCKER_COPY: Record<SendBlocker, (sender: string | null) => string> = {
   no_mailbox: () =>
     'No Gmail account is connected, and invoices are sent from your own mailbox. Connect one to enable sending.',
@@ -269,13 +280,53 @@ function RecipientCard({
         </div>
       )}
 
-      {blocker && (
-        <p className="mt-3 flex items-start gap-2 text-caption leading-relaxed text-ink-500">
-          <AlertTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" strokeWidth={1.75} />
-          <span>{BLOCKER_COPY[blocker](sender)}</span>
-        </p>
-      )}
+      {blocker && <EnableGmail blocker={blocker} sender={sender} />}
     </section>
+  );
+}
+
+/**
+ * The warning, and the one button that resolves it.
+ *
+ * Consent opens in a new tab because the callback is a bare server-rendered
+ * page that ends "you can close this tab" — sending the dashboard there would
+ * discard whatever the user had on screen and land them somewhere with no way
+ * back into the app.
+ */
+function EnableGmail({ blocker, sender }: { blocker: SendBlocker; sender: string | null }) {
+  const consent = useGmailConsentUrl();
+
+  return (
+    <div className="mt-3 flex flex-wrap items-start gap-3">
+      <p className="flex min-w-0 flex-1 items-start gap-2 text-caption leading-relaxed text-ink-500">
+        <AlertTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" strokeWidth={1.75} />
+        <span>{BLOCKER_COPY[blocker](sender)}</span>
+      </p>
+
+      <button
+        type="button"
+        disabled={consent.isPending}
+        onClick={() =>
+          consent.mutate(undefined, {
+            onSuccess: ({ url }) => window.open(url, '_blank', 'noopener,noreferrer'),
+          })
+        }
+        className="press flex h-9 shrink-0 items-center gap-2 rounded-lg border border-line bg-surface px-3.5 text-footnote font-medium text-ink-900 transition-colors hover:bg-canvas disabled:opacity-60"
+      >
+        {consent.isPending ? (
+          <Loader2Icon className="h-4 w-4 animate-spin text-ink-400" strokeWidth={1.75} />
+        ) : (
+          <MailIcon className="h-4 w-4 text-ink-400" strokeWidth={1.75} />
+        )}
+        {BLOCKER_ACTION[blocker]}
+      </button>
+
+      {consent.error && (
+        <div className="w-full">
+          <ErrorNote message={consent.error.message} />
+        </div>
+      )}
+    </div>
   );
 }
 

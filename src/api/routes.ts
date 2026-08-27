@@ -11,6 +11,7 @@ import {
 import { requireAuth } from '../auth/context.js';
 import { CATEGORIES, normalizeCategory } from '../categories.js';
 import { config, publicMcpUrl } from '../config.js';
+import { gmailConsentUrl } from '../gmail/connect.js';
 import { GmailSendScopeMissingError } from '../gmail/send.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
@@ -1218,6 +1219,20 @@ export function apiRouter(): Router {
         sent_at: d.sent_at.toISOString(),
       })),
     });
+  });
+
+  /*
+   * Starts the Gmail consent flow from the dashboard.
+   *
+   * Until now the only way to connect a mailbox was `pnpm cli auth`, which is
+   * fine for the operator who wrote it and useless to anyone else — and it is
+   * also the fix for the two states the Accountant tab reports most often
+   * (mailbox never connected, or connected before Rayshio could send). The URL
+   * carries a signed state binding this org, minted server-side, so the client
+   * never chooses which workspace the resulting grant lands in.
+   */
+  router.get('/gmail/consent-url', async (req, res) => {
+    res.json({ url: gmailConsentUrl(orgOf(req)) });
   });
 
   const accountantBody = z.object({
