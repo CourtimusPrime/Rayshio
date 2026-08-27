@@ -45,13 +45,21 @@ Two consequences worth knowing before you run anything:
 
 ## 2026-08-27
 
-### Fixed
-
-- **Chart tooltip values were black in dark mode**, on a near-black panel — measured at 1.05:1 contrast, i.e. invisible. Recharts styles each tooltip row *inline* as `color: entry.color || '#000'`, and a `<Cell>` fill never reaches the tooltip payload, so every chart using per-bar colours hit the `#000` fallback. `contentStyle` cannot fix it: the row's own inline colour wins. The tooltip *label* was always correct, which is why only the numbers looked wrong.
-
-  A `tooltipItem` token now sits beside `tooltip` in the chart palette (`web/src/state/theme.tsx`) and is passed as `itemStyle` by all three bar charts. Verified by reading the computed colours out of the browser in both themes rather than by eye: 13.9:1 dark, 14.6:1 light.
-
 ### Changed
+
+- **The Accountant tab sends through the signed-in Gmail account; Resend is gone.** Invoices now leave from the user's own mailbox — the message lands in their Sent folder, replies come back to them, and the accountant sees an address they already correspond with rather than a machine sender on a domain they have never heard of. `RESEND_API_KEY`, `MAIL_FROM` and `src/email/` are deleted; nothing else in the product needed a verified sending domain or a second vendor holding a copy of the invoices.
+
+  **This adds a restricted scope.** `gmail.send` sits alongside `gmail.readonly` on the consent screen, so it has to be declared in the Google verification submission — the dependency the milestone already calls out as the launch gate. `gmail.send`, not `gmail.compose`: compose can also create and modify drafts, which this app never does, and a restricted scope has to be justified on exactly what it is used for.
+
+  **Every mailbox connected before this must reconnect once.** `migrations/0016_account_scopes.sql` records what Google actually granted — not what was asked for, since the consent screen lets a user untick permissions — and the tab checks it before offering to send. Null means "granted before we recorded this", which is every existing grant, and all of those hold readonly alone. Without that column the only way to find out is a 403 from Google *after* the zip has been built.
+
+  The three ways sending can be unavailable — no mailbox, a revoked one, one holding read-only — are separate states in the API (`blocker`) and get separate sentences on screen, because the fix differs each time and none of them is guessable from "sending is unavailable".
+
+  A batch of invoice PDFs is several megabytes, which does not fit in the JSON body of `messages.send`, so anything over 4 MB goes through the media-upload endpoint instead. Gmail's ceiling is 35 MB counted *after* base64 inflates it by a third, so the attachment budget stays at 25 MB — tighter than Resend's 40 MB, and the per-send invoice cap is unchanged.
+
+- **Sessions persist for 30 days with a sliding window**, up from Better Auth's seven-day default. A dashboard someone opens when an invoice arrives — a few times a month — was signing people out for no reason they could connect to anything they did. `updateAge` refreshes the expiry at most once a day, so the renewal costs one write per day rather than one per request, and `cookieCache` carries a short signed copy of the session so most requests skip the database lookup entirely. Five minutes of staleness is the price: a session revoked server-side keeps working for up to that long.
+
+  The cookie stays `httpOnly`. Moving tokens to `localStorage` was considered and rejected: it would make them readable by any script on the origin, so one XSS anywhere — including inside a dependency — becomes account takeover, and lengthening the session multiplies the value of exactly that theft.
 
 - **Every sidebar icon now plays a one-shot animation on hover.** Ported from lucide-animated.com's shadcn registry: `layout-grid` (Dashboard), `chart-pie` (Breakdown), `receipt-text` (Invoices), `file-chart-line` (Reports), `hand-coins` (Accountant), `terminal` (MCP) and `settings`. Dashboard, Invoices and Reports also changed glyph — `LayoutGrid`, `ReceiptText` and `FileChartLine` respectively.
 
@@ -66,6 +74,12 @@ Two consequences worth knowing before you run anything:
 - **Icons play on hover and on keyboard focus, never on click.** `onFocus` alone fired on every navigation, because clicking a link focuses it — so the icon replayed just as the page changed, competing with the route transition. The handler now checks `:focus-visible`, which is the browser's own answer to "did this focus come from the keyboard": false for a pointer click, true for Tab.
 
   Under `prefers-reduced-motion` every one of these is skipped outright rather than shortened. Each icon's resting state is also where its animation ends, so there is nothing to settle.
+
+### Fixed
+
+- **Chart tooltip values were black in dark mode**, on a near-black panel — measured at 1.05:1 contrast, i.e. invisible. Recharts styles each tooltip row *inline* as `color: entry.color || '#000'`, and a `<Cell>` fill never reaches the tooltip payload, so every chart using per-bar colours hit the `#000` fallback. `contentStyle` cannot fix it: the row's own inline colour wins. The tooltip *label* was always correct, which is why only the numbers looked wrong.
+
+  A `tooltipItem` token now sits beside `tooltip` in the chart palette (`web/src/state/theme.tsx`) and is passed as `itemStyle` by all three bar charts. Verified by reading the computed colours out of the browser in both themes rather than by eye: 13.9:1 dark, 14.6:1 light.
 
 ### Removed
 

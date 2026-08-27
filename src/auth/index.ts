@@ -119,7 +119,32 @@ export const auth = betterAuth({
       updatedAt: 'updated_at',
     },
   },
+  /*
+   * Persistent sessions: signed in once, still signed in a month later.
+   *
+   * Better Auth's default is seven days, which for a dashboard someone opens
+   * when an invoice lands — a few times a month — means being bounced to Google
+   * for no reason a user can connect to anything they did. Thirty days with a
+   * sliding window covers a normal billing rhythm; `updateAge` refreshes the
+   * expiry at most once a day, so an active user is never signed out and the
+   * refresh costs one write per day rather than one per request.
+   *
+   * The cookie stays httpOnly, so the token is never readable by JavaScript.
+   * That is the whole reason not to keep it in localStorage: a single XSS
+   * anywhere on the origin — including inside a dependency — would otherwise
+   * hand over an account, and lengthening the session multiplies the value of
+   * exactly that theft.
+   *
+   * `cookieCache` carries a short signed copy of the session in the cookie
+   * itself, so most requests validate without a database round trip. Five
+   * minutes is the staleness this buys the speed with: a session revoked
+   * server-side keeps working for up to that long, which is the trade being
+   * made deliberately rather than by omission.
+   */
   session: {
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
     modelName: 'auth_session',
     fields: {
       expiresAt: 'expires_at',

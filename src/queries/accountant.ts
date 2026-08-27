@@ -20,6 +20,21 @@ import { EFFECTIVE_DATE } from './facts.js';
 import { displayName } from './service-name.js';
 import { keepsZeroCharges } from './zero-charges.js';
 
+/** The active mailbox a send would go out from, with the scopes it holds. */
+export async function sendingAccount(orgId: number) {
+  const accounts = await db
+    .selectFrom('client.account')
+    .select(['id', 'email_address', 'status', 'scopes'])
+    .where('org_id', '=', orgId)
+    .where('provider', '=', 'google')
+    .orderBy('connected_at')
+    .execute();
+  // The active one, or the newest of whatever exists — a revoked account is
+  // still worth naming on screen, since "reconnect it" is the fix either way.
+  const active = accounts.find((a) => a.status === 'active') ?? accounts[accounts.length - 1];
+  return active ? { ...active, id: Number(active.id) } : undefined;
+}
+
 export async function getAccountantEmail(orgId: number): Promise<string | null> {
   const row = await db
     .selectFrom('client.accountant')

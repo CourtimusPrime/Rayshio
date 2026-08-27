@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import express, { type Request, Router } from 'express';
 import { z } from 'zod';
 import {
+  NoMailboxError,
   NoRecipientError,
   NothingToSendError,
   outstanding,
@@ -10,7 +11,7 @@ import {
 import { requireAuth } from '../auth/context.js';
 import { CATEGORIES, normalizeCategory } from '../categories.js';
 import { config, publicMcpUrl } from '../config.js';
-import { EmailNotConfiguredError } from '../email/send.js';
+import { GmailSendScopeMissingError } from '../gmail/send.js';
 import { logoDomainFor } from '../logos/domains.js';
 import { logoForDomain } from '../logos/fetch.js';
 import { getPdf } from '../mongo/pdfs.js';
@@ -1261,8 +1262,14 @@ export function apiRouter(): Router {
        */
       if (error instanceof NoRecipientError) throw new BadRequest(error.message);
       if (error instanceof NothingToSendError) throw new BadRequest(error.message);
-      if (error instanceof EmailNotConfiguredError) {
-        res.status(503).json({ error: error.message });
+      /*
+       * Both of these are the user's situation and both have a fix they can
+       * act on — connect a mailbox, or reconnect one to grant sending — so
+       * they carry their message through as a 409 rather than becoming the
+       * generic 500 the error middleware would produce.
+       */
+      if (error instanceof NoMailboxError || error instanceof GmailSendScopeMissingError) {
+        res.status(409).json({ error: error.message });
         return;
       }
       throw error;

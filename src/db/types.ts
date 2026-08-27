@@ -112,6 +112,10 @@ export interface ClientAccount {
   org_id: Int8;
   provider: string;
   refresh_token_encrypted: string;
+  /**
+   * space-separated OAuth scopes the stored refresh token was granted; null for grants predating this column
+   */
+  scopes: string | null;
   status: Generated<string>;
 }
 

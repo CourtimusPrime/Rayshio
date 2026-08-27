@@ -10,13 +10,14 @@
  * outstanding.
  */
 
-import { EmailNotConfiguredError, emailConfigured, sendEmail } from '../email/send.js';
+import { GmailSendScopeMissingError, grantCanSend, sendAsAccount } from '../gmail/send.js';
 import { getPdf } from '../mongo/pdfs.js';
 import {
   type UntrackedInvoice,
   getAccountantEmail,
   recordDelivery,
   recordFailedDelivery,
+  sendingAccount,
   untrackedInvoices,
 } from '../queries/accountant.js';
 import { ConversionTracker, converterFor } from '../queries/converted.js';
@@ -27,10 +28,25 @@ import type { PackageSummary } from './package.js';
 
 export class NoRecipientError extends Error {}
 export class NothingToSendError extends Error {}
+/** No connected Gmail account at all — nothing to send *from*. */
+export class NoMailboxError extends Error {}
+
+/**
+ * Why a workspace cannot send, in the order the user has to fix it.
+ *
+ * A single boolean was enough when a server-side API key was the only
+ * prerequisite. Sending as the user's own mailbox has three distinct failure
+ * states — no mailbox, a revoked one, and one connected before `gmail.send`
+ * existed — and each needs different words on screen, so the API names which.
+ */
+export type SendBlocker = 'no_mailbox' | 'mailbox_revoked' | 'missing_send_scope';
 
 export interface OutstandingPreview {
   recipient: string | null;
-  email_configured: boolean;
+  /** The address a send goes out from — the user's own connected mailbox. */
+  sender: string | null;
+  can_send: boolean;
+  blocker: SendBlocker | null;
   summary: PackageSummary;
   /** Vendors in the outstanding batch, biggest first — what the tab lists. */
   services: { service: string; count: number; total_minor: number }[];
@@ -58,14 +74,35 @@ async function convert(invoices: UntrackedInvoice[], currency: string) {
   return { converted, meta: tracker.meta() };
 }
 
+/**
+ * Whether this workspace can send, and if not, which fix applies.
+ *
+ * Checked before the button is offered rather than discovered during a send:
+ * building a multi-megabyte zip and then failing on a missing scope wastes the
+ * user's time and tells them nothing they could have known beforehand.
+ */
+async function sendability(orgId: number) {
+  const account = await sendingAccount(orgId);
+  if (!account) return { sender: null, blocker: 'no_mailbox' as const };
+  if (account.status !== 'active') {
+    return { sender: account.email_address, blocker: 'mailbox_revoked' as const };
+  }
+  if (!grantCanSend(account.scopes)) {
+    return { sender: account.email_address, blocker: 'missing_send_scope' as const };
+  }
+  return { sender: account.email_address, blocker: null, accountId: account.id };
+}
+
 /** What the tab shows before anyone presses send. */
 export async function outstanding(orgId: number, currency: string): Promise<OutstandingPreview> {
-  const recipient = await getAccountantEmail(orgId);
+  const [recipient, sendable] = await Promise.all([getAccountantEmail(orgId), sendability(orgId)]);
 
   if (!recipient) {
     return {
       recipient: null,
-      email_configured: emailConfigured(),
+      sender: sendable.sender,
+      can_send: sendable.blocker === null,
+      blocker: sendable.blocker,
       summary: {
         invoice_count: 0,
         service_count: 0,
@@ -97,7 +134,9 @@ export async function outstanding(orgId: number, currency: string): Promise<Outs
 
   return {
     recipient,
-    email_configured: emailConfigured(),
+    sender: sendable.sender,
+    can_send: sendable.blocker === null,
+    blocker: sendable.blocker,
     summary: summarize(packaged, currency),
     services: [...services.values()].sort((a, b) => b.total_minor - a.total_minor),
     without_pdf_count: packaged.filter((i) => !i.pdf_id).length,
@@ -106,6 +145,8 @@ export async function outstanding(orgId: number, currency: string): Promise<Outs
 
 export interface SendResult {
   recipient: string;
+  /** The mailbox it was sent from, which is also where it now sits in Sent. */
+  sender: string;
   delivery_id: number;
   summary: PackageSummary;
   /** Left for the next send because the message hit its attachment ceiling. */
@@ -114,11 +155,21 @@ export interface SendResult {
 }
 
 export async function sendOutstanding(orgId: number, currency: string): Promise<SendResult> {
-  if (!emailConfigured()) {
-    throw new EmailNotConfiguredError(
-      'email delivery is not configured on this deployment — set RESEND_API_KEY and MAIL_FROM',
+  const sendable = await sendability(orgId);
+  if (sendable.blocker === 'no_mailbox') {
+    throw new NoMailboxError('connect a Gmail account before sending — invoices go out from it');
+  }
+  if (sendable.blocker === 'mailbox_revoked') {
+    throw new GmailSendScopeMissingError(
+      `${sendable.sender} is no longer connected — reconnect the mailbox to send from it`,
     );
   }
+  if (sendable.blocker === 'missing_send_scope' || sendable.accountId === undefined) {
+    throw new GmailSendScopeMissingError(
+      `${sendable.sender} was connected before sending was supported — reconnect the mailbox to grant permission to send`,
+    );
+  }
+  const accountId = sendable.accountId;
 
   const recipient = await getAccountantEmail(orgId);
   if (!recipient) throw new NoRecipientError('no accountant address is set for this workspace');
@@ -146,7 +197,7 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
   };
 
   try {
-    await sendEmail({
+    await sendAsAccount(accountId, {
       to: recipient,
       subject: subjectFor(message),
       text: textBody(message),
@@ -188,6 +239,7 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
 
   return {
     recipient,
+    sender: sendable.sender ?? '',
     delivery_id: deliveryId,
     summary: pkg.summary,
     deferred_count: pkg.deferred.length,

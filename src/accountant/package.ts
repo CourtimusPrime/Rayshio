@@ -8,7 +8,7 @@
  */
 
 import JSZip from 'jszip';
-import { MAX_ATTACHMENT_BYTES } from '../email/send.js';
+import { MAX_ATTACHMENT_BYTES } from '../gmail/send.js';
 import type { UntrackedInvoice } from '../queries/accountant.js';
 
 export interface PackagedInvoice extends UntrackedInvoice {

@@ -351,10 +351,19 @@ export interface AccountantDelivery {
   error: string | null;
 }
 
+/**
+ * Why a workspace cannot send, each needing different words on screen: no Gmail
+ * account connected, one whose grant was revoked, or one connected before
+ * Rayshio could send and so holding read-only permission.
+ */
+export type SendBlocker = 'no_mailbox' | 'mailbox_revoked' | 'missing_send_scope';
+
 export interface AccountantState {
   recipient: string | null;
-  /** False when the deployment has no mail provider configured. */
-  email_configured: boolean;
+  /** The mailbox invoices go out from — the user's own connected account. */
+  sender: string | null;
+  can_send: boolean;
+  blocker: SendBlocker | null;
   summary: AccountantSummary;
   services: { service: string; count: number; total_minor: number }[];
   /** Outstanding invoices with no stored PDF — sent as figures, not documents. */
@@ -364,6 +373,7 @@ export interface AccountantState {
 
 export interface AccountantSendResult {
   recipient: string;
+  sender: string;
   delivery_id: number;
   summary: AccountantSummary;
   /** Left for the next send because the message hit its attachment ceiling. */

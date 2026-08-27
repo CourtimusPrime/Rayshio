@@ -62,22 +62,6 @@ const envSchema = z.object({
   VITE_PUBLIC_ORIGIN: z.string().url().default('http://localhost:3000'),
   /** ECB-backed rate source used for query-time currency conversion. */
   FX_BASE_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
-
-  /*
-   * Outbound mail, used only by the Accountant tab.
-   *
-   * Both optional, and checked together at the point of use rather than here:
-   * an instance with no mail provider must still boot and serve every other
-   * page. The tab reports itself unconfigured instead, which is a far clearer
-   * failure than a server that exits at startup over a feature the operator has
-   * not adopted.
-   *
-   * MAIL_FROM must be an address on a domain verified with the provider —
-   * anything else is accepted by config validation and then rejected at send
-   * time, which is the one failure this cannot catch early.
-   */
-  RESEND_API_KEY: z.string().min(1).optional(),
-  MAIL_FROM: z.string().email().optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;

@@ -5,6 +5,20 @@ import { db } from '../db/client.js';
 
 export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
+/**
+ * Sending the accountant's invoices as the connected mailbox.
+ *
+ * `gmail.send` rather than `gmail.compose`: compose can also create and modify
+ * drafts, which this app never does, and a restricted scope has to be justified
+ * to Google on exactly what it is used for. `send` is the narrower claim and
+ * the true one.
+ *
+ * Separate from GMAIL_SCOPE, not merged into it, because a grant may hold one
+ * without the other — every mailbox connected before this existed has readonly
+ * alone, and `client.account.scopes` is what records which.
+ */
+export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+
 export function createOAuthClient(): Auth.OAuth2Client {
   return new google.auth.OAuth2(
     config.GOOGLE_CLIENT_ID,

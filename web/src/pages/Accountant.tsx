@@ -5,10 +5,27 @@ import { AnimatedCount, AnimatedCurrency } from '../components/AnimatedNumber';
 import { ServiceLogo } from '../components/ServiceLogo';
 import { EmptyNote, ErrorNote, LoadingBlock } from '../components/states';
 import { useWorkspace } from '../state/workspace';
-import type { AccountantDelivery, AccountantSummary } from '../types';
+import type { AccountantDelivery, AccountantSummary, SendBlocker } from '../types';
 import { formatCurrency, formatDate, formatRelativeTime } from '../utils/format';
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-card';
+
+/**
+ * Each reason sending is unavailable, and the one action that fixes it.
+ *
+ * Three separate sentences rather than one "sending is unavailable", because
+ * the fixes are different and none of them is guessable: connect a mailbox,
+ * reconnect a revoked one, or reconnect one that pre-dates sending and so was
+ * only ever granted permission to read.
+ */
+const BLOCKER_COPY: Record<SendBlocker, (sender: string | null) => string> = {
+  no_mailbox: () =>
+    'No Gmail account is connected, and invoices are sent from your own mailbox. Connect one to enable sending.',
+  mailbox_revoked: (sender) =>
+    `${sender ?? 'The connected mailbox'} is no longer authorised. Reconnect it to send from it again.`,
+  missing_send_scope: (sender) =>
+    `${sender ?? 'Your mailbox'} was connected before Rayshio could send mail, so it only has permission to read. Reconnect it to grant permission to send.`,
+};
 
 /**
  * Everything outstanding, in one send.
@@ -33,11 +50,15 @@ export function Accountant() {
   if (!data) return <ErrorNote message="Could not load the accountant settings." />;
 
   const outstanding = data.summary.invoice_count;
-  const canSend = Boolean(data.recipient) && data.email_configured && outstanding > 0;
+  const canSend = Boolean(data.recipient) && data.can_send && outstanding > 0;
 
   return (
     <div className="space-y-6">
-      <RecipientCard recipient={data.recipient} configured={data.email_configured} />
+      <RecipientCard
+        recipient={data.recipient}
+        sender={data.sender}
+        blocker={data.blocker}
+      />
 
       <section aria-labelledby="outstanding-heading" className={`${CARD} p-5 md:p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -102,7 +123,8 @@ export function Accountant() {
             <CheckIcon className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
             <span>
               Sent {send.data.summary.invoice_count} invoice
-              {send.data.summary.invoice_count === 1 ? '' : 's'} to {send.data.recipient}.
+              {send.data.summary.invoice_count === 1 ? '' : 's'} to {send.data.recipient} from{' '}
+              {send.data.sender} — it is in your Gmail Sent folder.
               {send.data.deferred_count > 0 &&
                 ` ${send.data.deferred_count} did not fit in one message and are still outstanding — send again to deliver them.`}
             </span>
@@ -185,10 +207,12 @@ function Figure({ label, children }: { label: string; children: React.ReactNode 
  */
 function RecipientCard({
   recipient,
-  configured,
+  sender,
+  blocker,
 }: {
   recipient: string | null;
-  configured: boolean;
+  sender: string | null;
+  blocker: SendBlocker | null;
 }) {
   const save = useSetAccountantEmail();
   const [value, setValue] = useState(recipient ?? '');
@@ -207,9 +231,9 @@ function RecipientCard({
         Your accountant
       </h2>
       <p className="mt-1 max-w-xl text-caption leading-relaxed text-ink-500">
-        Where invoices are emailed. Rayshio tracks what each address has already
-        received, so changing this hands the new address your full history rather
-        than only what arrives from now on.
+        Where invoices are emailed{sender ? `, sent from ${sender}` : ''}. Rayshio tracks what each
+        address has already received, so changing this hands the new address your full history
+        rather than only what arrives from now on.
       </p>
 
       <form
@@ -245,14 +269,10 @@ function RecipientCard({
         </div>
       )}
 
-      {!configured && (
+      {blocker && (
         <p className="mt-3 flex items-start gap-2 text-caption leading-relaxed text-ink-500">
           <AlertTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" strokeWidth={1.75} />
-          <span>
-            This deployment has no mail provider configured, so sending is
-            unavailable. Set <code className="text-code">RESEND_API_KEY</code> and{' '}
-            <code className="text-code">MAIL_FROM</code> to enable it.
-          </span>
+          <span>{BLOCKER_COPY[blocker](sender)}</span>
         </p>
       )}
     </section>

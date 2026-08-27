@@ -3,7 +3,7 @@ import { google } from 'googleapis';
 import { requireConfig } from '../config.js';
 import { encryptToken } from '../crypto/tokens.js';
 import { db } from '../db/client.js';
-import { GMAIL_SCOPE, createOAuthClient } from './oauth.js';
+import { GMAIL_SCOPE, GMAIL_SEND_SCOPE, createOAuthClient } from './oauth.js';
 
 /**
  * Connecting a mailbox, as a two-process flow.
@@ -82,7 +82,14 @@ export function gmailConsentUrl(orgId: number): string {
     // Without it a re-connect returns an access token only, and the stored
     // account cannot outlive the hour.
     prompt: 'consent',
-    scope: [GMAIL_SCOPE],
+    /*
+     * Both scopes in one consent screen. Asking for `send` later, at the moment
+     * someone presses the send button, would mean a second round-trip to Google
+     * from inside a page that was about to do work — and a user who declines it
+     * there has a connected mailbox that silently cannot do the thing the tab
+     * exists for.
+     */
+    scope: [GMAIL_SCOPE, GMAIL_SEND_SCOPE],
     state: mintConnectState(orgId),
   });
 }
@@ -103,6 +110,14 @@ export interface ConnectedMailbox {
 export async function completeGmailConnect(code: string, orgId: number): Promise<ConnectedMailbox> {
   const client = createOAuthClient();
   const { tokens } = await client.getToken(code);
+
+  /*
+   * What Google actually granted, which is not necessarily what was asked for:
+   * the consent screen lets a user untick individual permissions. Recording the
+   * response means the Accountant tab can say "reconnect to enable sending"
+   * before building a zip, rather than discovering it in a 403 afterwards.
+   */
+  const grantedScopes = tokens.scope ?? '';
 
   const refreshToken = tokens.refresh_token;
   if (!refreshToken) {
@@ -126,12 +141,14 @@ export async function completeGmailConnect(code: string, orgId: number): Promise
       refresh_token_encrypted: encrypted,
       connected_at: new Date(),
       status: 'active',
+      scopes: grantedScopes,
     })
     .onConflict((oc) =>
       oc.columns(['org_id', 'email_address']).doUpdateSet({
         refresh_token_encrypted: encrypted,
         connected_at: new Date(),
         status: 'active',
+        scopes: grantedScopes,
       }),
     )
     .returningAll()
