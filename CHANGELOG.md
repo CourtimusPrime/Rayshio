@@ -43,6 +43,74 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-08-28
+
+### Changed
+
+- **Route loading states are now measured from the real UI, not drawn by hand**
+  (Boneyard). The old `RouteSkeleton` was a set of grey bars per route, sized by
+  eye, under a comment admitting they were "gross shape only". They drifted every
+  time a page's internals moved and nothing ever reported it — the only symptom
+  was the layout jumping when the real page arrived. `boneyardPlugin` in
+  `web/vite.config.ts` now opens each route in a headless browser at 390 / 768 /
+  1440, records where every element actually landed, and writes
+  `web/src/bones/*.bones.json`. Re-running the capture is the whole maintenance
+  story.
+
+### Added
+
+- `web/src/dev/bones-fixtures.ts` — canned `/api/*` responses, installed only
+  while a capture is running. Every page is behind auth and a database, so a
+  headless visit would otherwise capture the signed-out marketing page. Stubbing
+  the *data* rather than writing mock JSX is what keeps the measurements honest:
+  they come from the real `InvoiceTable` and `ServiceBreakdownChart`, laid out by
+  the CSS that ships.
+- `web/src/components/BoneTarget.tsx` — wraps each route for the capture only.
+  The capture snapshots a `<Skeleton name>`'s *children*, so the wrapper has to
+  sit around the real page; `import.meta.env.DEV` makes it a passthrough that
+  compiles away, so `boneyard-js/react` is not shipped dormant in production.
+- `web/src/dev/bones-snapshot.ts` — capture-time patch that re-measures table
+  cells. See Notes.
+
+### Notes
+
+- **Boneyard captures a table as a solid grey slab, and `snapshotConfig` cannot
+  fix it.** `td` and `th` are in the library's `DEFAULT_LEAF_TAGS`
+  (`boneyard-js/dist/extract.js`), so every cell emits one bone covering the
+  whole cell box — full column width, full row height, zero radius. Adjacent
+  cells leave no gaps, so the invoice table captured as one uniform field:
+  pixel-accurate and useless as a loading state. The obvious lever does not
+  work — `leafTags` is *additive*
+  (`new Set([...DEFAULT_LEAF_TAGS, ...config.leafTags])`), so nothing can be
+  removed from it, and `excludeSelectors: ['td']` drops the cell together with
+  everything inside it. `bones-snapshot.ts` wraps `window.__BONEYARD_SNAPSHOT`
+  instead: it drops the cell bones (identifiable because `extract.js` writes
+  `r: 0` only for table elements, everything else defaults to 8) and re-adds
+  bones measured with a `Range` over each text node plus the rect of any
+  `img`/`svg`. Still measured, never guessed — it measures the text instead of
+  the padding around it. Result on `/invoices` at 1440: 59 bones with a 669px
+  tallest, to 97 bones with a 36px tallest.
+- **A route-level `<Skeleton>` needs a child with the captured height.** The
+  container is `position: relative` and sized by its children, and the bones live
+  in an absolutely-positioned `overflow: hidden` overlay. A route fallback has no
+  children — the page is still downloading — so the box collapses to zero and the
+  overlay clips every bone. `RouteSkeleton` renders an `aria-hidden` spacer at the
+  captured height for the widest breakpoint the viewport clears.
+- **Pass a literal colour to `<Skeleton>`, never a CSS variable.** Boneyard
+  derives the container tone by parsing the colour string with `adjustColor`; a
+  `rgb(var(--line-strong) / 1)` comes back unchanged, so containers and their
+  contents render in one tone. The literals in `RouteSkeleton` are
+  `--line-strong` in both themes and have to be kept in step with `index.css` by
+  hand.
+- **`/connect` has captured bones but never shows them**, because the fixture
+  account is `active` and the route redirects. Left as-is: the capture is cheap
+  and the file costs nothing.
+- The capture must crawl from `/?bones=1` rather than being handed a route list.
+  Given explicit routes the CLI guesses filesystem paths (`/Reports`) and misses
+  pages; crawling follows the real nav links and finds all six.
+
+---
+
 ## 2026-08-27
 
 ### Changed

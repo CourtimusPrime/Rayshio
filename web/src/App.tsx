@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSession } from './api/hooks';
 import { useMonthPrefetch } from './api/prefetch';
+import { BoneTarget } from './components/BoneTarget';
 import { RouteSkeleton } from './components/RouteSkeleton';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -178,12 +179,54 @@ function Shell() {
           */}
           <Suspense fallback={<RouteSkeleton key={pathname} pathname={pathname} />}>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/breakdown" element={<Breakdown />} />
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/accountant" element={<Accountant />} />
-              <Route path="/connect" element={<Mcp />} />
+              <Route
+                path="/"
+                element={
+                  <BoneTarget name="route-dashboard">
+                    <Dashboard />
+                  </BoneTarget>
+                }
+              />
+              <Route
+                path="/breakdown"
+                element={
+                  <BoneTarget name="route-breakdown">
+                    <Breakdown />
+                  </BoneTarget>
+                }
+              />
+              <Route
+                path="/invoices"
+                element={
+                  <BoneTarget name="route-invoices">
+                    <Invoices />
+                  </BoneTarget>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <BoneTarget name="route-reports">
+                    <Reports />
+                  </BoneTarget>
+                }
+              />
+              <Route
+                path="/accountant"
+                element={
+                  <BoneTarget name="route-accountant">
+                    <Accountant />
+                  </BoneTarget>
+                }
+              />
+              <Route
+                path="/connect"
+                element={
+                  <BoneTarget name="route-connect">
+                    <Mcp />
+                  </BoneTarget>
+                }
+              />
               {/* arriving at /signin while signed in: there is nothing to sign into */}
               <Route path="/signin" element={<Navigate replace to="/" />} />
               <Route path="/privacy" element={<Privacy />} />

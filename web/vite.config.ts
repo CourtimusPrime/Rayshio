@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import { boneyardPlugin } from 'boneyard-js/vite';
 import { type Plugin, defineConfig, loadEnv } from 'vite';
 
 /**
@@ -90,7 +91,35 @@ export default defineConfig(({ mode }) => {
   const apiPort = Number(env.VITE_API_PORT ?? 3000);
 
   return {
-    plugins: [react(), seoAssets(origin), reactScanDev()],
+    plugins: [
+      react(),
+      seoAssets(origin),
+      reactScanDev(),
+      /*
+       * Captures skeleton bones from the real pages on dev-server start and on
+       * every HMR update, so the loading states cannot drift from the layout
+       * they stand in for.
+       *
+       * `?bones=1` on each route turns on the stubbed API in
+       * `src/dev/bones-fixtures.ts`; without it a headless visit lands on the
+       * signed-out marketing page and captures nothing.
+       *
+       * Breakpoints match the widths the render checks assert at, so a bone set
+       * exists for every layout that is actually verified.
+       */
+      boneyardPlugin({
+        out: './src/bones',
+        breakpoints: [390, 768, 1440],
+        routes: [
+          '/?bones=1',
+          '/breakdown?bones=1',
+          '/invoices?bones=1',
+          '/reports?bones=1',
+          '/accountant?bones=1',
+          '/connect?bones=1',
+        ],
+      }),
+    ],
     build: { outDir: 'dist', emptyOutDir: true },
     server: {
       port,
