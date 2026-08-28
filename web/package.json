@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
+    "bones": "boneyard-js build \"http://localhost:5301/?bones=1\" --out ./src/bones --breakpoints 390,768,1440 --wait 3000 --force",
+    "dev:slow": "BONES_SLOW=30000 vite --port 5301 --strictPort",
     "preview": "vite preview"
   },
   "dependencies": {

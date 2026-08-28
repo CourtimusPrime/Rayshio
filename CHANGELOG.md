@@ -47,6 +47,23 @@ Two consequences worth knowing before you run anything:
 
 ### Changed
 
+- **Skeletons are now simplified from the capture rather than shown raw.**
+  Reviewed in a real browser, the literal captures were ugly, and measurably so:
+  the invoice page was 98 bones — 24 of them under 24px wide, 9 pairs
+  overlapping, 29 distinct widths, one a 1px divider — and Reports had 17
+  distinct heights across 33 bones. Nothing repeated, so it read as noise rather
+  than as content. `web/src/bones/simplify.ts` keeps the measured geometry and
+  throws away the variation: fragments merge, dust is dropped, heights snap to
+  text/control, one width per column, repeated rows cut to five and columns to
+  three, and anything card-sized is drawn as a 1px outline instead of a filled
+  block. Invoices went 100 bones to 32, and every route now uses two bone
+  heights instead of nine to seventeen.
+- **The capture measures text, not the box the text sits in.** Boneyard emits
+  one bone per leaf element at the element's own rect, so a short heading in a
+  full-width card captured as a full-bleed bar — which is why Dashboard and
+  Accountant looked like stacks of paragraphs. `bones-snapshot.ts` now measures
+  every text leaf with a `Range` and replaces the library's bone with the line
+  boxes the glyphs actually occupy.
 - **Route loading states are now measured from the real UI, not drawn by hand**
   (Boneyard). The old `RouteSkeleton` was a set of grey bars per route, sized by
   eye, under a comment admitting they were "gross shape only". They drifted every
@@ -69,8 +86,16 @@ Two consequences worth knowing before you run anything:
   The capture snapshots a `<Skeleton name>`'s *children*, so the wrapper has to
   sit around the real page; `import.meta.env.DEV` makes it a passthrough that
   compiles away, so `boneyard-js/react` is not shipped dormant in production.
-- `web/src/dev/bones-snapshot.ts` — capture-time patch that re-measures table
-  cells. See Notes.
+- `web/src/dev/bones-snapshot.ts` — capture-time patch that measures text runs
+  instead of element boxes. See Notes.
+- `web/src/bones/simplify.ts` — turns a capture into a skeleton, with
+  `test/unit/bones-simplify.test.ts` asserting the properties that make it read
+  as one (bounded rows, one width per column, no dust, no seams).
+- `pnpm bones` captures against a dev server on :5301, and `pnpm bones:review`
+  starts one with `BONES_SLOW=30000` so route chunks hang and the loading state
+  can actually be looked at in a browser. A lazy chunk arrives in milliseconds
+  locally, so before this the skeleton was gone before it could be screenshotted
+  — headless tooling can stall the request, a person driving Chrome cannot.
 
 ### Notes
 
@@ -105,6 +130,15 @@ Two consequences worth knowing before you run anything:
 - **`/connect` has captured bones but never shows them**, because the fixture
   account is `active` and the route redirects. Left as-is: the capture is cheap
   and the file costs nothing.
+- **The Boneyard Vite plugin re-captures on every HMR update, and a capture that
+  fires before the page mounts overwrites all six bone files with a single
+  page-sized bone.** It did exactly that twice during this work, silently. The
+  plugin is now behind `BONES_CAPTURE`, so captures only happen when asked for
+  (`pnpm bones`); losing a capture to a stray keystroke is worse than typing an
+  env var.
+- Shipping the raw captures plus `simplify.ts` rather than pre-simplified JSON
+  costs about 6 kB gzipped. That buys a re-capture needing no re-tuning, and a
+  simplification that is testable code rather than a build artifact.
 - The capture must crawl from `/?bones=1` rather than being handed a route list.
   Given explicit routes the CLI guesses filesystem paths (`/Reports`) and misses
   pages; crawling follows the real nav links and finds all six.

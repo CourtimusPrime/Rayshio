@@ -84,6 +84,42 @@ function reactScanDev(): Plugin {
   };
 }
 
+/**
+ * Holds route chunks open so the loading state can be looked at.
+ *
+ * A lazy chunk arrives in a few milliseconds on a local dev server, which makes
+ * a route skeleton impossible to review in a real browser — it is gone before
+ * the first paint you can screenshot. Headless tooling can stall the request
+ * itself; a person driving Chrome cannot.
+ *
+ * `BONES_SLOW=<ms> pnpm dev:web` delays every page chunk by that many
+ * milliseconds. `apply: 'serve'` and the env check together mean this cannot
+ * reach a build.
+ */
+const SLOW_ROUTES = /\/src\/pages\/(Dashboard|Breakdown|Invoices|Reports|Accountant|Connect|Mcp)\.tsx/;
+
+function slowRouteChunks(): Plugin {
+  const delay = Number(process.env.BONES_SLOW ?? 0);
+
+  return {
+    name: 'rayshio-slow-route-chunks',
+    apply: 'serve',
+    configureServer(server) {
+      if (!delay) return;
+      server.middlewares.use((req, _res, next) => {
+        // Only the signed-in routes. Landing/SignIn/NoWorkspace are fetched
+        // while the shell decides where to send you, so delaying those holds
+        // back the whole app and you get a blank page instead of a skeleton.
+        if (req.url && SLOW_ROUTES.test(req.url)) {
+          setTimeout(next, delay);
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const origin = env.VITE_PUBLIC_ORIGIN ?? DEFAULT_ORIGIN;
@@ -95,10 +131,14 @@ export default defineConfig(({ mode }) => {
       react(),
       seoAssets(origin),
       reactScanDev(),
+      slowRouteChunks(),
       /*
-       * Captures skeleton bones from the real pages on dev-server start and on
-       * every HMR update, so the loading states cannot drift from the layout
-       * they stand in for.
+       * Captures skeleton bones from the real pages. Off unless BONES_CAPTURE
+       * is set, because the plugin re-captures on *every* HMR update and writes
+       * `src/bones/` each time — and a capture that fires while the page has
+       * not mounted (mid-edit, or before the fixtures install) silently
+       * overwrites six good files with one page-sized bone. Losing a capture to
+       * a stray keystroke is worse than typing an env var.
        *
        * `?bones=1` on each route turns on the stubbed API in
        * `src/dev/bones-fixtures.ts`; without it a headless visit lands on the
@@ -107,7 +147,7 @@ export default defineConfig(({ mode }) => {
        * Breakpoints match the widths the render checks assert at, so a bone set
        * exists for every layout that is actually verified.
        */
-      boneyardPlugin({
+      ...(process.env.BONES_CAPTURE ? [boneyardPlugin({
         out: './src/bones',
         breakpoints: [390, 768, 1440],
         routes: [
@@ -118,7 +158,7 @@ export default defineConfig(({ mode }) => {
           '/accountant?bones=1',
           '/connect?bones=1',
         ],
-      }),
+      })] : []),
     ],
     build: { outDir: 'dist', emptyOutDir: true },
     server: {

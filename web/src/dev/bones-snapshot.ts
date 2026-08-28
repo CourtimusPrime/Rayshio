@@ -1,27 +1,25 @@
 /**
- * Capture-time patch: turn table cells into text-shaped bones.
+ * Capture-time patch: measure text, not the box the text sits in.
  *
- * Boneyard treats `td` and `th` as leaf elements (`DEFAULT_LEAF_TAGS` in
- * `boneyard-js/dist/extract.js`), so each cell emits exactly one bone covering
- * the whole cell box — full column width, full row height, zero radius. Rows of
- * those butt against each other with no gaps, and an invoice table captures as
- * one uniform grey slab: pixel-accurate and unreadable as a loading state.
+ * Boneyard emits one bone per leaf element at the element's own rect. For a
+ * heading in a full-width card that means a bone the width of the card, even
+ * when the heading is one short word — so a page of headings and labels
+ * captures as a stack of full-bleed bars that look nothing like the text they
+ * stand for. Table cells are worse: `td` and `th` are in the library's
+ * `DEFAULT_LEAF_TAGS` (`boneyard-js/dist/extract.js`), so every cell emits one
+ * bone covering the whole cell box, and adjacent cells leave no gaps — an
+ * invoice table captured as a single uniform grey slab.
  *
- * The library's `snapshotConfig.leafTags` cannot fix this. It is *additive* —
- * `new Set([...DEFAULT_LEAF_TAGS, ...config.leafTags])` — so there is no way to
- * stop a cell being a leaf, and `excludeSelectors: ['td']` would drop the cell
- * and everything inside it.
+ * `snapshotConfig` cannot fix either. `leafTags` is *additive*
+ * (`new Set([...DEFAULT_LEAF_TAGS, ...config.leafTags])`), so nothing can be
+ * removed from it, and `excludeSelectors: ['td']` drops the cell together with
+ * everything inside it.
  *
- * So we replace the cell bones after the fact, with bones measured from the
- * same DOM: a `Range` over each text node gives the line box the text actually
- * occupies, and `img`/`svg` descendants give their own rects. That keeps the
- * "measured, never guessed" property — nothing here is a hand-tuned width — it
- * just measures the text rather than the cell padding around it.
- *
- * Table bones are identifiable without tracking elements: `extract.js` writes
- * `r: 0` only for `table`/`thead`/`tbody`/`tr`/`td`/`th`. Every other bone falls
- * back to a radius of 8. So dropping `r === 0` drops the cells and the row and
- * body containers, and nothing else.
+ * So this wraps `window.__BONEYARD_SNAPSHOT`: it measures every text run with a
+ * `Range` — which gives the line boxes the glyphs actually occupy — plus the
+ * rect of any `img`/`svg`, and replaces the bone the library emitted for that
+ * element. Still measured, never guessed. It measures the text instead of the
+ * padding around it.
  *
  * Dev-only, and only while a capture is running.
  */
@@ -41,25 +39,40 @@ type SnapshotFn = (
   config?: unknown,
 ) => { bones: Bone[]; [k: string]: unknown };
 
-/** Rects of every text run and media element inside a cell, in viewport space. */
-function contentRects(cell: Element): DOMRect[] {
+/** Elements whose own rect the library would use instead of their text. */
+const TEXT_LEAVES = 'p, h1, h2, h3, h4, h5, h6, li, td, th';
+
+/** Rects of every text run and media element inside an element. */
+function contentRects(el: Element): DOMRect[] {
   const rects: DOMRect[] = [];
 
-  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!node.textContent?.trim()) continue;
     const range = document.createRange();
     range.selectNodeContents(node);
-    // One rect per line box, so a wrapped cell gets a bone per line rather than
+    // One rect per line box, so wrapped text gets a bone per line rather than
     // one bone spanning the ragged union of both lines.
     rects.push(...Array.from(range.getClientRects()));
   }
 
-  for (const media of cell.querySelectorAll('img, svg')) {
+  for (const media of el.querySelectorAll('img, svg')) {
     rects.push(media.getBoundingClientRect());
   }
 
   return rects;
+}
+
+/** Same box, to the pixel — how a bone is matched back to the element it came from. */
+function sameBox(bone: Bone, rect: DOMRect, root: DOMRect): boolean {
+  const x = ((rect.left - root.left) / root.width) * 100;
+  const w = (rect.width / root.width) * 100;
+  return (
+    Math.abs(bone.y - Math.round(rect.top - root.top)) <= 1 &&
+    Math.abs(bone.h - Math.round(rect.height)) <= 1 &&
+    Math.abs(bone.x - x) < 0.2 &&
+    Math.abs(bone.w - w) < 0.2
+  );
 }
 
 export function patchBonesSnapshot(): void {
@@ -75,12 +88,21 @@ export function patchBonesSnapshot(): void {
       const root = el.getBoundingClientRect();
       if (root.width <= 0) return result;
 
-      const bones = result.bones.filter((b) => b.r !== 0);
+      const replaced: Bone[] = [];
+      const drop = new Set<Bone>();
 
-      for (const cell of el.querySelectorAll('td, th')) {
-        for (const rect of contentRects(cell)) {
+      for (const node of el.querySelectorAll(TEXT_LEAVES)) {
+        const box = node.getBoundingClientRect();
+        const rects = contentRects(node);
+        if (rects.length === 0) continue;
+
+        for (const bone of result.bones) {
+          if (!bone.c && sameBox(bone, box, root)) drop.add(bone);
+        }
+
+        for (const rect of rects) {
           if (rect.width < 1 || rect.height < 1) continue;
-          bones.push({
+          replaced.push({
             x: +(((rect.left - root.left) / root.width) * 100).toFixed(4),
             y: Math.round(rect.top - root.top),
             w: +((rect.width / root.width) * 100).toFixed(4),
@@ -90,7 +112,10 @@ export function patchBonesSnapshot(): void {
         }
       }
 
-      result.bones = bones;
+      // `extract.js` writes `r: 0` only for table elements, and everything else
+      // falls back to 8 — so this drops the cell, row and body bones without
+      // needing to track which element produced which bone.
+      result.bones = [...result.bones.filter((b) => b.r !== 0 && !drop.has(b)), ...replaced];
       return result;
     };
     return true;
