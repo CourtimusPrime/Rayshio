@@ -147,6 +147,24 @@ export function previousPeriod(period: FiscalPeriod, startMonth: number): Fiscal
     : fiscalQuarterPeriod(period.fiscalYear, quarter - 1, startMonth);
 }
 
+/**
+ * How many months of a monthly budget apply to `period` as of `currentMonth`.
+ *
+ * A fully past period counts every month. The in-progress period counts only
+ * the months that have started, including the current one: comparing a quarter's
+ * first month of spend against three months of budget would always read "under"
+ * by roughly two months of budget, which says nothing. The current month counts
+ * in full because its invoices are already in the period total. A fully future
+ * period counts 0.
+ *
+ * `currentMonth` is a parameter, not read from a clock, so this stays testable.
+ * Zero-padded 'YYYY-MM' keys order correctly as strings.
+ */
+export function budgetMonthsCounted(period: Pick<FiscalPeriod, 'months'>, currentMonth: string) {
+  parseMonthKey(currentMonth);
+  return period.months.filter((m) => m <= currentMonth).length;
+}
+
 /** 'January' etc — for the fiscal-year-start setting. */
 export function monthName(startMonth: number): string {
   return longMonthLabel(`2000-${String(startMonth).padStart(2, '0')}`).replace(' 2000', '');

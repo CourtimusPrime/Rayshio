@@ -228,17 +228,28 @@ export function Reports() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-micro uppercase tracking-wide text-ink-400">Avg / invoice</dt>
-                  <dd className="tnum mt-1 text-body font-medium text-ink-900">
-                    {data.invoice_count === 0 ? (
-                      '—'
-                    ) : (
+                  <dt className="text-micro uppercase tracking-wide text-ink-400">Vs budget</dt>
+                  {data.budget_minor === null ? (
+                    <dd className="tnum mt-1 text-body font-medium text-ink-900">—</dd>
+                  ) : data.current_total_minor === data.budget_minor ? (
+                    <dd className="tnum mt-1 text-body font-medium text-ink-900">On budget</dd>
+                  ) : data.current_total_minor > data.budget_minor ? (
+                    <dd className="tnum mt-1 text-body font-medium text-danger-text">
                       <AnimatedCurrency
-                        value={Math.round(data.current_total_minor / data.invoice_count)}
+                        value={data.current_total_minor - data.budget_minor}
                         currency={currency}
-                      />
-                    )}
-                  </dd>
+                      />{' '}
+                      over
+                    </dd>
+                  ) : (
+                    <dd className="tnum mt-1 text-body font-medium text-accent-strong">
+                      <AnimatedCurrency
+                        value={data.budget_minor - data.current_total_minor}
+                        currency={currency}
+                      />{' '}
+                      under
+                    </dd>
+                  )}
                 </div>
               </dl>
 

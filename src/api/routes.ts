@@ -57,6 +57,7 @@ import { classifyDocumentType } from '../queries/document-type.js';
 import { invoiceFacts, lineItemFacts } from '../queries/facts.js';
 import {
   type PeriodType,
+  budgetMonthsCounted,
   parsePeriodKey,
   periodsForMonths,
   previousPeriod,
@@ -1096,6 +1097,16 @@ export function apiRouter(): Router {
     if (!period) throw new BadRequest(`unknown period '${key}'`);
     const prior = previousPeriod(period, fiscalStart);
 
+    const now = new Date();
+    const budgetMonths = budgetMonthsCounted(period, currentMonthKey(now));
+    const today = now.toISOString().slice(0, 10);
+    const budgetRateDate = period.to < today ? period.to : today;
+    const budgetSourceCurrency = org?.budget_currency ?? currency;
+    const rawBudget =
+      org?.monthly_budget_minor === null || org?.monthly_budget_minor === undefined
+        ? null
+        : Number(org.monthly_budget_minor);
+
     // one fetch spanning both periods so a single FX series covers them
     const [facts, lineItems] = await Promise.all([
       invoiceFacts(orgId, { dateFrom: prior.from, dateTo: period.to }),
@@ -1107,9 +1118,20 @@ export function apiRouter(): Router {
       [
         ...facts.map((f) => ({ currency: f.currency, date: f.effective_date })),
         ...lineItems.map((li) => ({ currency: li.currency, date: li.effective_date })),
+        // makeConverter only loads rate series for currencies in its inputs, so a
+        // budget in a currency none of these invoices use would throw
+        // FxUnavailableError without this leg.
+        ...(rawBudget === null ? [] : [{ currency: budgetSourceCurrency, date: budgetRateDate }]),
       ],
       currency,
     );
+    // multiply first, round once; no tracker.note — matches /summary, and
+    // ConversionMeta describes summed invoice data. An FX failure propagates to
+    // the error middleware like any invoice leg.
+    const budget =
+      rawBudget === null
+        ? null
+        : convert(rawBudget * budgetMonths, budgetSourceCurrency, budgetRateDate).minor;
     const converted = convertInvoices(facts, convert, tracker, currency);
 
     const inPeriod = (p: { months: string[] }) =>
@@ -1129,6 +1151,11 @@ export function apiRouter(): Router {
       previous_period: { key: prior.key, label: prior.label, rangeLabel: prior.rangeLabel },
       current_total_minor: total,
       previous_total_minor: previousTotal,
+      // monthly budget x months counted, converted at the period end or today,
+      // whichever is earlier (a budget is forward-looking, as in /summary, but no
+      // rate exists for a future date)
+      budget_minor: budget,
+      budget_months: budgetMonths,
       invoice_count: current.length,
       service_count: new Set(current.map((c) => c.service)).size,
       // one point per month inside the period, so a quarter reads as three bars

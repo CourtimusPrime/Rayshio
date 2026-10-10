@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  budgetMonthsCounted,
   fiscalQuarterOf,
   fiscalQuarterPeriod,
   fiscalYearOf,
@@ -115,5 +116,42 @@ describe('previousPeriod', () => {
 
   it('steps back a year', () => {
     expect(previousPeriod(fiscalYearPeriod(2026, APR), APR).key).toBe('FY2025');
+  });
+});
+
+describe('budgetMonthsCounted', () => {
+  it('counts every month of a fully past quarter', () => {
+    expect(budgetMonthsCounted(fiscalQuarterPeriod(2026, 1, JAN), '2026-10')).toBe(3);
+  });
+
+  it('counts every month of a fully past year', () => {
+    expect(budgetMonthsCounted(fiscalYearPeriod(2025, JAN), '2026-10')).toBe(12);
+  });
+
+  it('counts only the months that have started in the current quarter', () => {
+    const q4 = fiscalQuarterPeriod(2026, 4, JAN); // Oct-Dec 2026
+    expect(budgetMonthsCounted(q4, '2026-10')).toBe(1);
+    expect(budgetMonthsCounted(q4, '2026-11')).toBe(2);
+    expect(budgetMonthsCounted(q4, '2026-12')).toBe(3);
+  });
+
+  it('counts the started months of a year part-way through', () => {
+    expect(budgetMonthsCounted(fiscalYearPeriod(2027, APR), '2026-10')).toBe(7);
+  });
+
+  it('handles a fiscal year crossing the calendar year', () => {
+    expect(budgetMonthsCounted(fiscalYearPeriod(2027, APR), '2027-02')).toBe(11);
+  });
+
+  it('counts the current month when the period starts in it', () => {
+    expect(budgetMonthsCounted(fiscalYearPeriod(2027, OCT), '2026-10')).toBe(1);
+  });
+
+  it('counts nothing for a fully future period', () => {
+    expect(budgetMonthsCounted(fiscalQuarterPeriod(2027, 1, JAN), '2026-10')).toBe(0);
+  });
+
+  it('throws on a malformed current month', () => {
+    expect(() => budgetMonthsCounted(fiscalQuarterPeriod(2026, 1, JAN), '2026-13')).toThrow();
   });
 });

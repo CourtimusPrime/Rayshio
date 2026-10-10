@@ -333,6 +333,10 @@ export interface ReportResponse {
   previous_period: { key: string; label: string; rangeLabel: string };
   current_total_minor: number;
   previous_total_minor: number;
+  /** Already converted into the display currency; null when the org has no monthly budget. */
+  budget_minor: number | null;
+  /** Months of the period the budget covers; fewer than period.months.length while in progress. */
+  budget_months: number;
   invoice_count: number;
   service_count: number;
   trend: TrendPoint[];
