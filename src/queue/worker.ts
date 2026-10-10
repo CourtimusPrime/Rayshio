@@ -1,4 +1,5 @@
 import { type Job, Worker } from 'bullmq';
+import { runIndividualSend } from '../accountant/deliver.js';
 import { db } from '../db/client.js';
 import { backfillSender } from '../pipeline/backfill.js';
 import { discoverSenders } from '../pipeline/discovery.js';
@@ -27,6 +28,13 @@ async function process(job: Job): Promise<string> {
       return syncAccount(job.data as JobPayloads['sync-account']);
     case 'sync-all':
       return syncAll();
+    case 'accountant-send': {
+      const data = job.data as JobPayloads['accountant-send'];
+      return runIndividualSend(data, {
+        // Persisted on the job so a stalled re-run resumes the row this run holds.
+        hold: (deliveryId) => job.updateData({ ...data, deliveryId }),
+      });
+    }
     default:
       throw new Error(`unknown job: ${name satisfies never}`);
   }

@@ -7,6 +7,7 @@ import {
   NothingToSendError,
   outstanding,
   sendOutstanding,
+  sweepStaleRun,
 } from '../accountant/deliver.js';
 import { type AuthContext, requireAuth, requireOrgRole } from '../auth/context.js';
 import { claimableDomain } from '../auth/domain.js';
@@ -31,6 +32,7 @@ import {
   isUploadedInvoice,
 } from '../pipeline/uploads.js';
 import {
+  AlreadySendingError,
   clearAccountantEmail,
   recentDeliveries,
   setAccountantEmail,
@@ -1317,6 +1319,17 @@ export function apiRouter(): Router {
   router.get('/accountant', async (req, res) => {
     const orgId = orgOf(req);
     const currency = requireCurrency(req.query.currency);
+    /*
+     * Close a run whose process died before reading anything. Without this a
+     * crashed run would keep the tab polling with the send button disabled for
+     * good. A failure to sweep (FX unavailable, say) must not take the whole tab
+     * down — the next poll retries it — so it is logged and the read carries on.
+     */
+    try {
+      await sweepStaleRun(orgId);
+    } catch (error) {
+      console.error('accountant: stale-run sweep failed:', error);
+    }
     const [preview, deliveries] = await Promise.all([
       outstanding(orgId, currency),
       recentDeliveries(orgId),
@@ -1385,7 +1398,10 @@ export function apiRouter(): Router {
     );
 
     try {
-      res.json(await sendOutstanding(orgId, currency));
+      const result = await sendOutstanding(orgId, currency);
+      // One-by-one is started, not finished: the run continues on the worker, so
+      // 202 and the tab follows the 'sending' row. Bulk completes in-request.
+      res.status(result.mode === 'individual' ? 202 : 200).json(result);
     } catch (error) {
       /*
        * These three are the user's situation, not a server fault, and each has
@@ -1397,12 +1413,18 @@ export function apiRouter(): Router {
       if (error instanceof NoRecipientError) throw new BadRequest(error.message);
       if (error instanceof NothingToSendError) throw new BadRequest(error.message);
       /*
-       * Both of these are the user's situation and both have a fix they can
-       * act on — connect a mailbox, or reconnect one to grant sending — so
-       * they carry their message through as a 409 rather than becoming the
-       * generic 500 the error middleware would produce.
+       * All of these are the user's situation and each has a fix they can
+       * act on — connect a mailbox, reconnect one to grant sending, or wait
+       * for the run already going — so they carry their message through as a
+       * 409 rather than becoming the generic 500 the error middleware would
+       * produce. The last matters most: a second concurrent run is how an
+       * accountant gets every invoice twice.
        */
-      if (error instanceof NoMailboxError || error instanceof GmailSendScopeMissingError) {
+      if (
+        error instanceof NoMailboxError ||
+        error instanceof GmailSendScopeMissingError ||
+        error instanceof AlreadySendingError
+      ) {
         res.status(409).json({ error: error.message });
         return;
       }
