@@ -454,6 +454,14 @@ export function useAccountant(currency: string | undefined) {
     // would 400 on every first paint.
     enabled: Boolean(currency),
     retry: retryUnlessUnauthorized,
+    /*
+     * Progress lives on the server: a one-by-one run is a 'sending' row that the
+     * worker fills in, and the outstanding count is recomputed from the ledger on
+     * every read. So polling is what makes the count fall as batches land, and it
+     * stops by itself the moment the last 'sending' row closes.
+     */
+    refetchInterval: (query) =>
+      query.state.data?.deliveries.some((d) => d.status === 'sending') ? 2000 : false,
   });
 }
 

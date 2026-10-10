@@ -40,6 +40,10 @@ Two consequences worth knowing before you run anything:
   redirect it. The shell scripts under `scripts/` are the exception — they
   `set -a; . ./.env`, which clobbers the exported value, so invoke the
   underlying binary directly when overriding.
+- **One-by-one accountant sending only progresses while the worker is running**
+  (`pnpm worker`). The API opens the first history row and enqueues; the worker
+  does the sending. Never start a worker against the shared `.env` Redis/DB to
+  test it — it would mail the real accountant.
 
 ---
 
@@ -99,6 +103,37 @@ Two consequences worth knowing before you run anything:
     converter only loads rates for currencies it was told about, so a budget in a
     currency no invoice in the window uses would otherwise throw.
 
+- **Accountant one-by-one send now delivers everything outstanding, in batches
+  of 25, with each batch as its own history row.** One press used to send the
+  first 25 and stop, leaving the user to press again for the rest of a ~337
+  invoice backlog. The run now happens on a BullMQ `accountant-send` job
+  because ~337 sends at ~1s each cannot fit inside one HTTP request.
+  `POST /api/accountant/send` returns **202** in this mode (the run has started,
+  not finished); bulk still answers 200 when it is done. A failed send stops the
+  run: invoices already accepted stay delivered, the failing batch's row carries
+  the error, no further batch starts, and the remainder stays outstanding.
+- **Concurrent accountant sends are refused with 409, in both modes.** Enforced
+  by a partial unique index allowing one `sending` row per workspace, and every
+  email is sent while holding that row. Duplicate emails are the failure that
+  matters: `index_delivery_item_invoice_recipient` only ever prevented duplicate
+  _ledger rows_, not duplicate _mail_, so two runs could both have mailed an
+  invoice before either recorded it. Bulk is refused too while a one-by-one run
+  is active, otherwise toggling to bulk mid-run would zip and mail the invoices
+  the run is about to send one by one.
+
+### Fixed
+
+- **The Accountant history showed "0 invoices · 0 services £0.00" for the whole
+  of a one-by-one run.** `startDelivery` inserted the row with status `sent` and
+  zero totals, and `finishDelivery` only filled them in at the end, so for the
+  length of the run (delivery row 8, about 15 seconds) it read as a failed send.
+  Rows are now `sending` until closed and show a "Sending…" pill with a live
+  "{n} sent so far" count and no total. The tab polls every 2s while any row is
+  `sending` and stops by itself when none is; the send button and mode toggle are
+  disabled meanwhile, and the outstanding count falls as batches land. A
+  one-by-one press no longer shows a "Sent" banner, because nothing has been sent
+  when it returns.
+
 ### Notes
 
 - **Known-unresolved: `GET /api/summary` converts the budget without adding the
@@ -122,6 +157,49 @@ Two consequences worth knowing before you run anything:
   refuses such accounts before the callback and the join path is safe. When the
   client becomes external, the join path should additionally require the ID
   token's `hd` (hosted domain) claim to equal the claimed domain.
+- **Migration `0019_accountant_delivery_sending` must be applied.** It widens the
+  delivery status check to `sending | sent | failed` and adds the one-sending-row
+  index. It runs at boot on Railway for both services. It is numbered 0019
+  because `0018_org_auto_join_domain` was committed first; two files sharing a
+  prefix would break node-pg-migrate's ordering on any database that applied one
+  before the other. It has not been applied to the shared development database.
+  The status check is dropped by definition rather than by name, since production
+  has drifted from `migrations/` before. Up, down and up again were run on a
+  scratch Postgres.
+- **One-by-one sending now needs the worker running** (`pnpm worker` locally).
+  Without one, the row sits `sending` until the 10-minute stale sweep closes it as
+  failed.
+- **Stale `sending` rows are closed on the next `GET /api/accountant` or send
+  attempt**, once older than 10 minutes, as `failed` with an "interrupted" error
+  and totals computed from their recorded items. A sweep at worker boot was
+  rejected: it would be cross-tenant, and would race the old worker during a
+  Railway rolling deploy. A batch is at most 25 sends (under a minute), so a
+  10-minute threshold is unambiguous from any request.
+- **BullMQ re-runs a stalled job once even with `attempts: 1`** (the worker died
+  mid-job, e.g. a redeploy; `maxStalledCount` defaults to 1). The job records the
+  row it holds in its own data via `job.updateData`, so a re-run resumes that
+  row instead of colliding with it on the one-sending-row index.
+- **Known-unresolved: at-least-once window.** A crash between Gmail accepting a
+  message and the ledger write resends that one invoice on the next run. It
+  existed before this change and is now one invoice per crash rather than one
+  per request.
+- **Known-unresolved: bulk does not take the lock.** It only refuses while a run
+  is live, so a bulk request landing in the same instant as a one-by-one start in
+  another tab can still race. The UI disables both controls mid-run, so this
+  needs two near-simultaneous requests in different modes.
+- **The NCZ zip-send delivery records (deliveries 1–3 and 5–7) were deleted on
+  2026-10-10** because Hubdoc did not accept the zips. A backup JSON is kept
+  outside the repo.
+- Verified on a scratch Postgres/Mongo/Redis on the thinkpad (never the shared
+  databases): migration up/down/up and the index; `POST /accountant/send` is 409
+  while a run is live in either mode, and `GET` closes a row backdated 11 minutes
+  as failed; in a browser, the real button press gets 202, the pill and live
+  count show, the controls are disabled, polling runs every 2s and stops once the
+  row closes. **Not run:** a real send. No worker ran, and Gmail was never
+  called, so the batch loop is covered by unit tests against an in-memory ledger
+  rather than by an actual delivery.
+- The Boneyard skeleton for `/accountant` was not recaptured; the history row
+  gained a pill but the fixture does not enumerate a `sending` status.
 
 ---
 

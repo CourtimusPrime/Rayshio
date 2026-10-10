@@ -16,9 +16,11 @@ import { formatCurrency, formatDate, formatRelativeTime } from '../utils/format'
 const CARD = 'rounded-xl border border-line bg-surface shadow-card';
 
 /**
- * Invoices per press in one-by-one mode; mirrors MAX_INDIVIDUAL_PER_SEND on the
- * server. Duplicated rather than fetched because it only labels a button — and
- * a stale label is a smaller problem than an extra round trip on every render.
+ * Invoices per batch in one-by-one mode — one batch is one history row. Mirrors
+ * MAX_INDIVIDUAL_PER_SEND on the server. It labels the batch size, not a limit
+ * per press: one press sends everything outstanding. Duplicated rather than
+ * fetched because it only appears in copy, and a stale label is a smaller
+ * problem than an extra round trip on every render.
  */
 const INDIVIDUAL_BATCH = 25;
 
@@ -82,6 +84,9 @@ export function Accountant() {
 
   const outstanding = data.summary.invoice_count;
   const canSend = Boolean(data.recipient) && data.can_send && outstanding > 0;
+  // A one-by-one run is going on the worker. Sending again, or flipping the mode
+  // underneath it, would race the run the server is already refusing to double.
+  const sending = data.deliveries.some((d) => d.status === 'sending');
 
   return (
     <div className="space-y-6">
@@ -102,7 +107,7 @@ export function Accountant() {
                 ? `Never sent to ${data.recipient}. Each invoice goes out once — sending marks these as delivered, so the next batch starts empty.`
                 : 'Set an address above to see what is waiting to be sent.'}
               {data.recipient && data.send_mode === 'individual'
-                ? ` One email per invoice, ${INDIVIDUAL_BATCH} at a time.`
+                ? ` One email per invoice, sent in batches of ${INDIVIDUAL_BATCH}. A large backlog takes a few minutes and keeps going if you leave the page.`
                 : ''}
             </p>
           </div>
@@ -111,25 +116,25 @@ export function Accountant() {
               do not fit on one line, and squeezing them pushed the card past
               the viewport. The toggle takes its own row there instead. */}
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap md:gap-3">
-            <SendModeToggle mode={data.send_mode} recipient={data.recipient} />
+            <SendModeToggle mode={data.send_mode} recipient={data.recipient} sending={sending} />
 
           <button
             type="button"
-            disabled={!canSend || send.isPending}
+            disabled={!canSend || send.isPending || sending}
             onClick={() => send.mutate(currency)}
             className="press ml-auto flex h-10 shrink-0 items-center gap-2 rounded-lg bg-accent px-4 text-footnote font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
-            {send.isPending ? (
+            {send.isPending || sending ? (
               <Loader2Icon className="h-4 w-4 animate-spin" strokeWidth={1.75} />
             ) : (
               <SendIcon className="h-4 w-4" strokeWidth={1.75} />
             )}
-            {send.isPending
+            {send.isPending || sending
               ? 'Sending…'
               : outstanding === 0
                 ? 'Nothing to send'
                 : data.send_mode === 'individual'
-                  ? `Send ${Math.min(outstanding, INDIVIDUAL_BATCH)} email${Math.min(outstanding, INDIVIDUAL_BATCH) === 1 ? '' : 's'}`
+                  ? `Send ${outstanding} email${outstanding === 1 ? '' : 's'}`
                   : `Send ${outstanding} invoice${outstanding === 1 ? '' : 's'}`}
           </button>
           </div>
@@ -158,7 +163,10 @@ export function Accountant() {
           </div>
         )}
 
-        {send.isSuccess && send.data && (
+        {/* Bulk only. A one-by-one start has sent nothing yet, so a "Sent" banner
+            would claim mail that is still going out and then linger after the
+            run ends; the 'Sending…' row in the history is its feedback. */}
+        {send.isSuccess && send.data?.mode === 'bulk' && (
           <div
             role="status"
             className="mt-4 flex items-start gap-2.5 rounded-lg bg-accent-soft px-3.5 py-3 text-footnote text-accent-strong"
@@ -168,10 +176,9 @@ export function Accountant() {
               Sent {send.data.summary.invoice_count} invoice
               {send.data.summary.invoice_count === 1 ? '' : 's'} to {send.data.recipient} from{' '}
               {send.data.sender}
-              {send.data.mode === 'individual'
-                ? ` as ${send.data.summary.invoice_count === 1 ? 'one email' : 'separate emails'}`
-                : ''}{' '}
-              — {send.data.summary.invoice_count === 1 ? 'it is' : "they are"} in your Gmail Sent
+              {' '}
+              —{' '}
+              {send.data.summary.invoice_count === 1 ? 'it is' : "they are"} in your Gmail Sent
               folder.
               {send.data.deferred_count > 0 &&
                 ` ${send.data.deferred_count} did not fit in one message and are still outstanding — send again to deliver them.`}
@@ -218,11 +225,21 @@ export function Accountant() {
  * one email — so it is stored, and asking on every send would be asking a
  * question whose answer never changes.
  */
-function SendModeToggle({ mode, recipient }: { mode: SendMode; recipient: string | null }) {
+function SendModeToggle({
+  mode,
+  recipient,
+  sending,
+}: {
+  mode: SendMode;
+  recipient: string | null;
+  sending: boolean;
+}) {
   const save = useSetAccountantEmail();
   // The mode lives on the same row as the address, which is NOT NULL — there is
-  // nowhere to store it until an address exists.
-  const disabled = !recipient || save.isPending;
+  // nowhere to store it until an address exists. Also locked mid-run: switching
+  // to bulk would be refused by the server anyway, and the toggle should not
+  // offer what it cannot deliver.
+  const disabled = !recipient || save.isPending || sending;
 
   return (
     <div
@@ -441,16 +458,32 @@ function DeliveryHistory({ deliveries }: { deliveries: AccountantDelivery[] }) {
                     Failed
                   </span>
                 )}
-                <span className="ml-auto text-body tabular-nums text-ink-900">
-                  {formatCurrency(delivery.total_minor, delivery.currency)}
-                </span>
+                {delivery.status === 'sending' && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-accent-soft px-2 py-0.5 text-micro font-medium text-accent-strong">
+                    <Loader2Icon className="h-3 w-3 animate-spin" strokeWidth={1.75} aria-hidden />
+                    Sending…
+                  </span>
+                )}
+                {/* No total while sending: it is only computed when the batch
+                    closes, and showing £0.00 is what read as a failure. */}
+                {delivery.status !== 'sending' && (
+                  <span className="ml-auto text-body tabular-nums text-ink-900">
+                    {formatCurrency(delivery.total_minor, delivery.currency)}
+                  </span>
+                )}
               </div>
               <p className="mt-0.5 text-caption text-ink-500">
-                {delivery.invoice_count} invoice{delivery.invoice_count === 1 ? '' : 's'} ·{' '}
-                {delivery.service_count} service{delivery.service_count === 1 ? '' : 's'}
-                {delivery.period_start && delivery.period_end
-                  ? ` · ${formatDate(delivery.period_start)} – ${formatDate(delivery.period_end)}`
-                  : ''}
+                {delivery.status === 'sending' ? (
+                  `${delivery.invoice_count} sent so far`
+                ) : (
+                  <>
+                    {delivery.invoice_count} invoice{delivery.invoice_count === 1 ? '' : 's'} ·{' '}
+                    {delivery.service_count} service{delivery.service_count === 1 ? '' : 's'}
+                    {delivery.period_start && delivery.period_end
+                      ? ` · ${formatDate(delivery.period_start)} – ${formatDate(delivery.period_end)}`
+                      : ''}
+                  </>
+                )}
               </p>
               {delivery.error && (
                 <p className="mt-1 text-caption text-danger-text">{delivery.error}</p>

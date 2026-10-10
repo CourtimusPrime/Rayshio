@@ -374,7 +374,12 @@ export interface AccountantDelivery {
   period_end: string | null;
   total_minor: number;
   currency: string;
-  status: 'sent' | 'failed' | string;
+  /**
+   * While 'sending', `invoice_count` is the live number delivered so far and the
+   * other totals are not yet meaningful — they are only computed when the batch
+   * closes.
+   */
+  status: 'sending' | 'sent' | 'failed' | string;
   error: string | null;
 }
 
@@ -408,13 +413,28 @@ export interface AccountantState {
   deliveries: AccountantDelivery[];
 }
 
-export interface AccountantSendResult {
-  mode: SendMode;
-  recipient: string;
-  sender: string;
-  delivery_id: number;
-  summary: AccountantSummary;
-  /** Left for the next send because the message hit its attachment ceiling. */
-  deferred_count: number;
-  without_pdf_count: number;
-}
+/**
+ * What POST /accountant/send answers with. Bulk finishes inside the request and
+ * reports the result; one-by-one only *starts* (HTTP 202) — the run continues on
+ * the worker and progress is read from the 'sending' row in the history.
+ */
+export type AccountantSendResult =
+  | {
+      mode: 'bulk';
+      recipient: string;
+      sender: string;
+      delivery_id: number;
+      summary: AccountantSummary;
+      /** Left for the next send because the message hit its attachment ceiling. */
+      deferred_count: number;
+      without_pdf_count: number;
+    }
+  | {
+      mode: 'individual';
+      status: 'sending';
+      recipient: string;
+      sender: string;
+      delivery_id: number;
+      outstanding_count: number;
+      batch_size: number;
+    };
