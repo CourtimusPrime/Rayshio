@@ -43,6 +43,51 @@ Two consequences worth knowing before you run anything:
 
 ---
 
+## 2026-10-10
+
+### Added
+
+- **Workspace auto-join by email domain.** An owner or admin can turn on
+  "Auto-join for @company.com" in Workspace settings; anyone who then signs in
+  with a verified address on that domain and belongs to no workspace joins as a
+  Member. Prompted by a colleague who signed in and landed on the "no
+  workspace" page, because membership could only come from an invitation or
+  `pnpm cli grant-membership`. Why it is built the way it is:
+  - The domain is derived from the enabling owner/admin's own verified email
+    and is never free text. The request body is `{ enabled }` only and any other
+    key is a 400. Otherwise anyone with admin rights could claim a domain they
+    do not control and absorb its users.
+  - Public mail providers (gmail.com, outlook.com, the gmx/yahoo/hotmail
+    families, and so on), unverified and malformed addresses are refused.
+    Claiming gmail.com would hand every Gmail user to one tenant.
+  - A unique index on `lower(auto_join_domain)` means two workspaces can never
+    claim the same domain; otherwise a second org could siphon a company's
+    users. The second attempt is a 409, shown inline under the toggle.
+  - Only users with zero memberships are auto-joined, at request time in
+    `resolveAuthContext` rather than in the sign-up hook. That picks up the
+    reporting colleague on their next request without signing in again, and
+    means nobody already in a workspace is pulled into another silently.
+  - The insert is `ON CONFLICT DO NOTHING` with a `NOT EXISTS` guard in the same
+    statement, rather than reusing `grantMembership`'s upsert, so it can never
+    change an existing member's role or race a membership granted a moment
+    earlier. Each join logs one `auto-join:` line, since the grant is otherwise
+    silent.
+  - The "no workspace" page now tells the person what to ask for.
+  - Migration `0018_org_auto_join_domain` is new and applies at boot on Railway
+    like the others. It has not been applied to the shared development
+    database.
+
+### Notes
+
+- **Known-unresolved: `email_verified` is not proof of Workspace membership.**
+  Google reports it as true for a consumer Google account registered with a
+  company address. Today the OAuth client is an internal Workspace app, so Google
+  refuses such accounts before the callback and the join path is safe. When the
+  client becomes external, the join path should additionally require the ID
+  token's `hd` (hosted domain) claim to equal the claimed domain.
+
+---
+
 ## 2026-08-28
 
 ### Changed

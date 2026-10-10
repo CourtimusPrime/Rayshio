@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { XIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSetBudget, useSetOrgSettings } from '../api/hooks';
+import { useSetAutoJoin, useSetBudget, useSetOrgSettings } from '../api/hooks';
 import { useBackgroundInert } from '../hooks/useBackgroundInert';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useScrollLock } from '../hooks/useScrollLock';
@@ -29,21 +29,26 @@ const MONTHS = [
 /**
  * Org-level configuration, per `SPEC.md`'s Settings surface.
  *
- * A modal rather than a tab because these are four settings, not a page, and a
- * seventh sidebar entry for them would cost more than it returns. The spec's
- * fuller Settings tab — the service category list — can take this over when it
- * exists; the API it calls is already a partial update, so nothing here has to
- * change to grow.
+ * A modal rather than a tab because these are a handful of settings, not a page,
+ * and a seventh sidebar entry for them would cost more than it returns. The
+ * spec's fuller Settings tab — the service category list — can take this over
+ * when it exists; the API it calls is already a partial update, so nothing here
+ * has to change to grow.
  *
  * Budget lives here rather than on the Dashboard. It was a card beside the
  * spend summary, which spent half a row on a number the summary already
  * reported; the setting itself is org configuration, which is what this is.
- * It writes through a second endpoint, so a save can touch two mutations.
+ * It writes through a second endpoint, so a save can touch several mutations.
+ *
+ * The auto-join row writes through its own role-gated endpoint and is shown to
+ * owners and admins only. The domain is never typed: the server derives it from
+ * the caller's own verified email, so this only ever offers on/off.
  */
 export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { meta, currencies, currency: displayCurrency } = useWorkspace();
   const save = useSetOrgSettings();
   const saveBudget = useSetBudget();
+  const saveAutoJoin = useSetAutoJoin();
   const panelRef = useRef<HTMLDivElement>(null);
   const { pick, spring } = useMotionPrefs();
 
@@ -52,6 +57,7 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
   const [mode, setMode] = useState<DepartmentMode>('single');
   const [zeroMode, setZeroMode] = useState<ZeroChargeMode>('hide');
   const [budget, setBudget] = useState<string>('');
+  const [autoJoin, setAutoJoin] = useState<boolean>(false);
 
   /*
    * Re-seeded from the server every time the modal opens, not once on mount.
@@ -65,9 +71,11 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
     setMode(meta.org.department_mode);
     setZeroMode(meta.org.zero_charge_mode);
     setBudget(meta.budget ? (meta.budget.monthly_budget_minor / 100).toFixed(2) : '');
+    setAutoJoin(meta.org.auto_join_domain !== null);
     save.reset();
     saveBudget.reset();
-  }, [open, meta, save.reset, saveBudget.reset]);
+    saveAutoJoin.reset();
+  }, [open, meta, save.reset, saveBudget.reset, saveAutoJoin.reset]);
 
   useBackgroundInert(open);
   useScrollLock(open);
@@ -99,15 +107,20 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
   const budgetValid = budget.trim() === '' || (Number.isFinite(budgetParsed) && budgetParsed >= 0);
   const budgetChanged = budget.trim() !== seededBudget;
 
+  const canManageAutoJoin = meta?.viewer.role === 'owner' || meta?.viewer.role === 'admin';
+  const autoJoinStored = meta !== undefined && meta.org.auto_join_domain !== null;
+  const autoJoinChanged = canManageAutoJoin && autoJoin !== autoJoinStored;
+
   const dirty =
     meta !== undefined &&
     (currency !== (meta.org.default_currency ?? '') ||
       fiscalMonth !== meta.fiscal_year_start_month ||
       mode !== meta.org.department_mode ||
       zeroMode !== meta.org.zero_charge_mode ||
-      budgetChanged);
+      budgetChanged ||
+      autoJoinChanged);
 
-  const saving = save.isPending || saveBudget.isPending;
+  const saving = save.isPending || saveBudget.isPending || saveAutoJoin.isPending;
 
   /*
    * Two endpoints, so the close is gated on both settling rather than on
@@ -142,6 +155,8 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
         ),
       );
     }
+
+    if (autoJoinChanged) pending.push(saveAutoJoin.mutateAsync({ enabled: autoJoin }));
 
     try {
       await Promise.all(pending);
@@ -386,6 +401,59 @@ export function OrgSettingsModal({ open, onClose }: { open: boolean; onClose: ()
                   Refunds and credit notes are negative, not zero, so they are always shown.
                 </p>
               </fieldset>
+
+              {canManageAutoJoin && meta && (
+                <fieldset>
+                  <legend className="text-footnote font-medium text-ink-900">Joining</legend>
+                  {(() => {
+                    const domain = meta.org.auto_join_domain ?? meta.viewer.auto_join_candidate;
+                    // Off and nothing to offer: say why instead of hiding the row
+                    const blocked = !autoJoin && meta.viewer.auto_join_candidate === null;
+                    const blockedCaption = {
+                      unverified: 'Verify your email address to offer auto-join.',
+                      'public-provider':
+                        'Auto-join needs a company email domain — your sign-in address is on a personal mail provider.',
+                      malformed: 'Your account email has no domain auto-join can use.',
+                    } as const;
+                    return (
+                      <label
+                        className={`press-row mt-3 flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                          blocked
+                            ? 'cursor-not-allowed border-line opacity-50'
+                            : `cursor-pointer ${
+                                autoJoin
+                                  ? 'border-accent bg-accent-soft'
+                                  : 'border-line hover:bg-canvas'
+                              }`
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={autoJoin}
+                          disabled={blocked}
+                          onChange={(event) => setAutoJoin(event.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-body text-ink-900">
+                            {blocked ? 'Auto-join by email domain' : `Auto-join for @${domain}`}
+                          </span>
+                          <span className="mt-0.5 block text-caption text-ink-500">
+                            {blocked
+                              ? blockedCaption[meta.viewer.auto_join_blocked_reason ?? 'malformed']
+                              : `Anyone who signs in with a verified @${domain} Google account joins this workspace as a Member.`}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })()}
+                  {saveAutoJoin.error && (
+                    <div className="mt-2">
+                      <ErrorNote message={(saveAutoJoin.error as Error).message} />
+                    </div>
+                  )}
+                </fieldset>
+              )}
 
               {mode === 'multi' && meta?.org.department_mode === 'single' && (
                 <p className="rounded-lg bg-canvas px-3.5 py-3 text-caption text-ink-500 ring-1 ring-line">

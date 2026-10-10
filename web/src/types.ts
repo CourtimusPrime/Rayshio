@@ -55,6 +55,8 @@ export const CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 
 export type DepartmentMode = 'single' | 'multi';
 
+export type OrgRole = 'owner' | 'admin' | 'member';
+
 /** Whether rows charging exactly nothing are shown. Mirrors `src/queries/meta.ts`. */
 export type ZeroChargeMode = 'show' | 'hide';
 
@@ -67,6 +69,18 @@ export interface Meta {
     department_mode: DepartmentMode;
     /** 'hide' omits rows charging exactly 0 from every list and breakdown. */
     zero_charge_mode: ZeroChargeMode;
+    /** Email domain whose verified users join as Members; null = auto-join is off. */
+    auto_join_domain: string | null;
+  };
+  /**
+   * Describes the signed-in caller rather than the org: whether they may manage
+   * auto-join, and which domain enabling it would claim (derived from their own
+   * verified email, never typed).
+   */
+  viewer: {
+    role: OrgRole;
+    auto_join_candidate: string | null;
+    auto_join_blocked_reason: 'unverified' | 'malformed' | 'public-provider' | null;
   };
   account: { email_address: string; provider: string; status: string } | null;
   currencies: string[];

@@ -27,7 +27,8 @@ export function NoWorkspace() {
 
         <p className="mt-4 rounded-lg bg-canvas px-3.5 py-3 text-footnote text-ink-500 ring-1 ring-line">
           Your account exists, but it is not attached to any workspace yet, so there is nothing to
-          show. An owner can add you — after that, reload this page.
+          show. An owner can add you, or turn on auto-join for your company's email domain in
+          Workspace settings — after that, reload this page.
         </p>
 
         <div className="mt-6 flex items-center gap-3">

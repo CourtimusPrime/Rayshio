@@ -403,6 +403,22 @@ export function useSetOrgSettings() {
   });
 }
 
+/**
+ * Turns auto-join by email domain on or off. The domain is not an input: the
+ * server derives it from the caller's own verified email.
+ */
+export function useSetAutoJoin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { enabled: boolean }) =>
+      apiSend<{ auto_join_domain: string | null }>('PUT', '/org/auto-join', input),
+    // `void`, for the reason given in useSetOrgSettings
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['meta'] });
+    },
+  });
+}
+
 export function useSetBudget() {
   const queryClient = useQueryClient();
   return useMutation({
