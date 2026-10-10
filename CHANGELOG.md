@@ -77,8 +77,45 @@ Two consequences worth knowing before you run anything:
     like the others. It has not been applied to the shared development
     database.
 
+### Changed
+
+- **Reports: "Avg / invoice" is replaced by "Vs budget".** The third stat under
+  Total spend now shows how far the period's spend was over or under budget,
+  at the user's request: a period's spend only means something against what the
+  company meant to spend. `GET /api/reports` gains `budget_minor` (display
+  currency, `null` without a budget) and `budget_months`. Why it works this way:
+  - **Only started months count for the current period.** Comparing a quarter
+    one month in against three months of budget would always read "under" by
+    roughly two months of budget, which says nothing. The current month counts
+    in full because its invoices are already in the total. A past quarter counts
+    3 months, a past year 12, a fully future period 0 (shown as "Period not
+    started" rather than the whole spend "over" a zero budget). The in-progress
+    caption reads "Budget to date · N of M months".
+  - **Conversion date.** The budget converts from its own currency at the period
+    end, or today if the period has not ended. A budget is a forward-looking
+    figure (the same reasoning `/summary` uses for the end of the reported
+    month), but no rate exists for a date that has not happened.
+  - **The budget currency joins the converter inputs for the request.** The
+    converter only loads rates for currencies it was told about, so a budget in a
+    currency no invoice in the window uses would otherwise throw.
+
 ### Notes
 
+- **Known-unresolved: `GET /api/summary` converts the budget without adding the
+  budget currency to `converterFor`'s inputs.** Confirmed in `makeConverter`
+  (`src/fx/rates.ts`): it loads series only for the display currency plus the
+  currencies in its inputs. If the budget currency is not the display currency
+  and not used by any invoice in the window (USD/AED are pegged and need no
+  series), the lookup either throws `FxUnavailableError` (a 500 on the
+  Dashboard) or reads whatever rates an earlier request left in the module-level
+  cache. Not fixed here; out of scope for this change.
+- The Boneyard skeleton for `/reports` (`web/src/bones/route-reports.bones.json`)
+  was not recaptured; the stat cell gained a caption line. Refresh with
+  `pnpm bones` while the dev server is on 5301. The `/api/reports` fixture does
+  carry the new fields.
+- Not run: the scratch-database Playwright check of the Reports page (past
+  quarter, current quarter, no budget). The month count is unit-tested and the
+  typecheck passes; the rendered states are unverified in a browser.
 - **Known-unresolved: `email_verified` is not proof of Workspace membership.**
   Google reports it as true for a consumer Google account registered with a
   company address. Today the OAuth client is an internal Workspace app, so Google
