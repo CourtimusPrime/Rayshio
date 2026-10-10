@@ -17,6 +17,15 @@ export interface JobPayloads {
   'extract-invoice': { accountId: number; invoiceId: number; messageId: string };
   'sync-account': { accountId: number };
   'sync-all': Record<string, never>;
+  /**
+   * One-by-one accountant send: the whole outstanding backlog, in batches.
+   *
+   * `deliveryId` is the 'sending' row the job currently holds. The worker
+   * rewrites it with `job.updateData` as each batch opens, so a stalled re-run
+   * (BullMQ re-runs a stalled job once even with `attempts: 1`) resumes that
+   * row instead of colliding with it on the one-sending-row-per-org index.
+   */
+  'accountant-send': { orgId: number; currency: string; recipient: string; deliveryId: number };
 }
 
 export type JobName = keyof JobPayloads;

@@ -10,27 +10,28 @@
  * outstanding.
  */
 
-import {
-  GmailSendError,
-  GmailSendScopeMissingError,
-  grantCanSend,
-  sendAsAccount,
-} from '../gmail/send.js';
+import { GmailSendScopeMissingError, grantCanSend, sendAsAccount } from '../gmail/send.js';
 import { getPdf } from '../mongo/pdfs.js';
 import {
+  AlreadySendingError,
   type SendMode,
+  type SendingDelivery,
   type UntrackedInvoice,
+  deliveryInvoices,
+  discardEmptyDelivery,
   finishDelivery,
   getAccountantSettings,
   recordDeliveredItem,
   recordDelivery,
   recordFailedDelivery,
   sendingAccount,
+  sendingDelivery,
   startDelivery,
   untrackedInvoices,
 } from '../queries/accountant.js';
 import { ConversionTracker, converterFor } from '../queries/converted.js';
 import { getOrg } from '../queries/meta.js';
+import { type JobPayloads, enqueue } from '../queue/queues.js';
 import {
   htmlBody,
   singleInvoiceBody,
@@ -42,14 +43,15 @@ import { archiveFilename, buildPackage, invoiceFilename, summarize } from './pac
 import type { PackageSummary, PackagedInvoice } from './package.js';
 
 /**
- * Invoices per press in one-by-one mode.
+ * Invoices per batch in one-by-one mode — one batch is one history row.
  *
  * Far below the bulk ceiling of 150, and the limit is Gmail rather than us:
  * `messages.send` costs 100 quota units against a 250-per-second per-user
  * budget, so sustained sending is about two messages a second. Twenty-five is
- * roughly fifteen seconds of work — long enough to be worth doing, short enough
- * that the request is in no danger of a gateway timeout. The rest defers, and
- * the tab says how many are left.
+ * roughly fifteen seconds of work, which keeps each history row a readable size
+ * and bounds how long any one row can legitimately stay 'sending'. The whole
+ * backlog goes out in successive batches on the worker, because ~337 invoices
+ * at ~1s each is far beyond any request timeout.
  */
 export const MAX_INDIVIDUAL_PER_SEND = 25;
 
@@ -181,7 +183,7 @@ export async function outstanding(orgId: number, currency: string): Promise<Outs
 }
 
 export interface SendResult {
-  mode: SendMode;
+  mode: 'bulk';
   recipient: string;
   /** The mailbox it was sent from, which is also where it now sits in Sent. */
   sender: string;
@@ -192,7 +194,72 @@ export interface SendResult {
   without_pdf_count: number;
 }
 
-export async function sendOutstanding(orgId: number, currency: string): Promise<SendResult> {
+/** One-by-one send accepted: the run continues on the worker, not in the request. */
+export interface SendStarted {
+  mode: 'individual';
+  status: 'sending';
+  recipient: string;
+  sender: string;
+  delivery_id: number;
+  outstanding_count: number;
+  batch_size: number;
+}
+
+/**
+ * Closes a batch row with the totals of what its own items say went out.
+ *
+ * Totals come from the ledger rather than an in-memory list, so a resumed or
+ * swept row still describes delivered mail instead of whatever this process
+ * happened to remember.
+ */
+async function closeBatch(
+  orgId: number,
+  deliveryId: number,
+  currency: string,
+  error: string | null,
+): Promise<void> {
+  const recorded = await deliveryInvoices(orgId, deliveryId);
+  const { converted } = await convert(recorded, currency);
+  const summary = summarize(
+    converted.map((i) => ({ ...i, filename: '' })),
+    currency,
+  );
+  await finishDelivery(deliveryId, {
+    invoiceCount: summary.invoice_count,
+    serviceCount: summary.service_count,
+    periodStart: summary.period_start,
+    periodEnd: summary.period_end,
+    totalMinor: summary.total_minor,
+    error,
+  });
+}
+
+/**
+ * Closes the org's 'sending' row if its process has evidently died, so a crashed
+ * run cannot lock the workspace forever. Returns the live run, if there is one.
+ *
+ * Runs on the read and send paths of the API rather than at worker boot: a boot
+ * sweep would be cross-tenant, and would race the old worker during a rolling
+ * deploy. Staleness is measured from the row's own start time and a batch is
+ * bounded at 25 sends, so the age threshold is safe to check from any request.
+ */
+export async function sweepStaleRun(orgId: number): Promise<SendingDelivery | undefined> {
+  const live = await sendingDelivery(orgId);
+  if (!live) return undefined;
+  if (!live.stale) return live;
+  await closeBatch(
+    orgId,
+    live.id,
+    live.currency,
+    'Stopped partway — the sending process was interrupted. Invoices not counted here are still outstanding and go out on the next send.',
+  );
+  return undefined;
+}
+
+export async function sendOutstanding(
+  orgId: number,
+  currency: string,
+): Promise<SendResult | SendStarted> {
   const sendable = await sendability(orgId);
   if (sendable.blocker === 'no_mailbox') {
     throw new NoMailboxError('connect a Gmail account before sending — invoices go out from it');
@@ -212,13 +279,56 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
   const { email: recipient, sendMode } = await getAccountantSettings(orgId);
   if (!recipient) throw new NoRecipientError('no accountant address is set for this workspace');
 
+  // Refused in both modes. A bulk send mid-run would zip and mail the very
+  // invoices the run is about to send one by one — a second concurrent run is how
+  // an accountant gets every invoice twice.
+  const live = await sweepStaleRun(orgId);
+  if (live) {
+    throw new AlreadySendingError(
+      `already sending to ${live.recipient} — wait for the current run to finish`,
+    );
+  }
+
   const invoices = await untrackedInvoices(orgId, recipient);
   if (invoices.length === 0) {
     throw new NothingToSendError(`${recipient} already has every invoice`);
   }
 
   if (sendMode === 'individual') {
-    return sendOneByOne({ orgId, accountId, recipient, currency, invoices });
+    // AlreadySendingError from here is the race between the check above and
+    // this insert; the partial unique index is what actually settles it.
+    const deliveryId = await startDelivery({ orgId, recipient, currency });
+    try {
+      await enqueue(
+        'accountant-send',
+        { orgId, currency, recipient, deliveryId },
+        // Dashes, never colons: BullMQ 5.81+ rejects ':' in job ids. attempts: 1
+        // because a send is not safe to retry blind; stalled re-runs are handled
+        // by the job holding its row, not by BullMQ's retry count.
+        { jobId: `accountant-send-${orgId}-${deliveryId}`, attempts: 1 },
+      );
+    } catch (error) {
+      // Otherwise a dead Redis would leave the workspace locked for ten minutes.
+      const reason = error instanceof Error ? error.message : String(error);
+      await finishDelivery(deliveryId, {
+        invoiceCount: 0,
+        serviceCount: 0,
+        periodStart: null,
+        periodEnd: null,
+        totalMinor: 0,
+        error: `could not start sending: ${reason}`,
+      });
+      throw error;
+    }
+    return {
+      mode: 'individual',
+      status: 'sending',
+      recipient,
+      sender: sendable.sender ?? '',
+      delivery_id: deliveryId,
+      outstanding_count: invoices.length,
+      batch_size: MAX_INDIVIDUAL_PER_SEND,
+    };
   }
 
   const [{ converted, meta }, org] = await Promise.all([
@@ -291,7 +401,9 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
 }
 
 /**
- * One email per invoice, its own PDF attached rather than zipped.
+ * One email per invoice, its own PDF attached rather than zipped, for the whole
+ * outstanding backlog, in batches of MAX_INDIVIDUAL_PER_SEND — one batch is one
+ * history row. Runs on the worker; the API only opens the first row and enqueues.
  *
  * The mode exists for filing inboxes — Hubdoc, Dext, Xero — which read one
  * attachment per message and cannot see inside a zip at all. A single bulk
@@ -302,86 +414,159 @@ export async function sendOutstanding(orgId: number, currency: string): Promise<
  * twentieth send can fail after nineteen have arrived, and those nineteen must
  * stay delivered or the accountant receives them again on the retry. A failure
  * therefore stops the run and keeps what already went — it does not roll back.
+ *
+ * Single-holder rule: every email is sent while this run holds the org's one
+ * 'sending' row (a partial unique index allows only one). The row is acquired
+ * before the untracked invoices are read, and re-checked immediately before each
+ * send, so two runs can never both be mailing and a row swept as stale stops the
+ * run that lost it before its next message. That ordering is the no-duplicate
+ * invariant.
+ *
+ * Business failures (a rejected send, a changed address, a lost hold) end the
+ * run and return a string, like the pipeline stages, so BullMQ does not retry a
+ * job that has already mailed people. Only unexpected errors throw.
  */
-async function sendOneByOne(input: {
-  orgId: number;
-  accountId: number;
-  recipient: string;
-  currency: string;
-  invoices: UntrackedInvoice[];
-}): Promise<SendResult> {
-  const { orgId, accountId, recipient, currency } = input;
-  const { converted } = await convert(input.invoices, currency);
-  const batch = converted.slice(0, MAX_INDIVIDUAL_PER_SEND);
+export async function runIndividualSend(
+  job: JobPayloads['accountant-send'],
+  deps: {
+    /** Persist the row this run now holds, so a stalled re-run resumes it. */
+    hold: (deliveryId: number) => Promise<void>;
+    sleep?: (ms: number) => Promise<void>;
+  },
+): Promise<string> {
+  const { orgId, currency, recipient } = job;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
-  const deliveryId = await startDelivery({ orgId, recipient, currency });
+  let held = job.deliveryId;
+  let delivered = 0;
+  let batches = 0;
+  let sentAny = false;
 
-  const sent: PackagedInvoice[] = [];
-  let withoutPdf = 0;
-  let failure: string | null = null;
+  const summary = (reason: string) =>
+    `delivered ${delivered} invoice${delivered === 1 ? '' : 's'} to ${recipient} in ${batches} batch${batches === 1 ? '' : 'es'}; ${reason}`;
 
-  for (const [index, invoice] of batch.entries()) {
-    const packaged: PackagedInvoice = { ...invoice, filename: invoiceFilename(invoice) };
-
-    let pdf: Buffer | undefined;
-    if (invoice.pdf_id) {
-      try {
-        pdf = await getPdf(invoice.pdf_id);
-      } catch {
-        // The row points at a blob that is gone. Send the figures rather than
-        // holding the invoice back forever over a missing attachment.
-        pdf = undefined;
-      }
-    }
-    if (!pdf) withoutPdf += 1;
-
-    try {
-      // Spacing, not throttling after the fact: messages.send costs 100 of
-      // Gmail's 250 per-second quota units, so back to back this would start
-      // returning 429s partway through a run.
-      if (index > 0) await new Promise((resolve) => setTimeout(resolve, SEND_INTERVAL_MS));
-
-      await sendAsAccount(accountId, {
-        to: recipient,
-        subject: singleInvoiceSubject(packaged, undefined),
-        text: singleInvoiceBody(packaged, currency, Boolean(pdf)),
-        attachments: pdf
-          ? [{ filename: packaged.filename, content: pdf, mimeType: 'application/pdf' }]
-          : [],
-      });
-    } catch (error) {
-      failure = error instanceof Error ? error.message : String(error);
-      break;
-    }
-
-    // After the send, never before: recording first would mark an invoice
-    // delivered that a bounce swallowed.
-    await recordDeliveredItem(deliveryId, invoice.invoice_id, recipient);
-    sent.push(packaged);
-  }
-
-  const summary = summarize(sent, currency);
-  await finishDelivery(deliveryId, {
-    invoiceCount: summary.invoice_count,
-    serviceCount: summary.service_count,
-    periodStart: summary.period_start,
-    periodEnd: summary.period_end,
-    totalMinor: summary.total_minor,
-    error: failure,
-  });
-
-  // A run that sent nothing at all is a failure the user has to see; one that
-  // stopped partway is reported through the counts, with the remainder simply
-  // still outstanding.
-  if (sent.length === 0 && failure) throw new GmailSendError(failure);
-
-  return {
-    mode: 'individual',
-    recipient,
-    sender: (await sendingAccount(orgId))?.email_address ?? '',
-    delivery_id: deliveryId,
-    summary,
-    deferred_count: input.invoices.length - sent.length,
-    without_pdf_count: withoutPdf,
+  /** Closes the held row, but only if it is still the live one. */
+  const closeIfHeld = async (error: string | null) => {
+    const live = await sendingDelivery(orgId);
+    if (live?.id === held) await closeBatch(orgId, held, currency, error);
   };
+
+  try {
+    const sendable = await sendability(orgId);
+    if (sendable.blocker !== null || sendable.accountId === undefined) {
+      const reason = `Stopped — ${sendable.sender ?? 'the mailbox'} can no longer send (${sendable.blocker ?? 'no mailbox'}). Reconnect it to continue.`;
+      await closeIfHeld(reason);
+      return summary('stopped, mailbox cannot send');
+    }
+    const accountId = sendable.accountId;
+
+    for (;;) {
+      // Never mail the old address after the user pointed the workspace elsewhere.
+      const settings = await getAccountantSettings(orgId);
+      if (settings.email !== recipient) {
+        await closeIfHeld('Stopped — the accountant address changed.');
+        return summary('stopped, accountant address changed');
+      }
+
+      // Acquire (or confirm) the single 'sending' row before reading anything.
+      const live = await sendingDelivery(orgId);
+      let existing = 0;
+      if (live && live.id === held) {
+        // Our row: the first batch, or a stalled re-run resuming where it died.
+        existing = (await deliveryInvoices(orgId, held)).length;
+      } else if (live) {
+        return summary('another run is in progress');
+      } else {
+        try {
+          held = await startDelivery({ orgId, recipient, currency });
+        } catch (error) {
+          if (error instanceof AlreadySendingError) return summary('another run is in progress');
+          throw error;
+        }
+        await deps.hold(held);
+      }
+
+      const capacity = MAX_INDIVIDUAL_PER_SEND - existing;
+      if (capacity <= 0) {
+        await closeBatch(orgId, held, currency, null);
+        batches += 1;
+        continue;
+      }
+
+      const untracked = await untrackedInvoices(orgId, recipient);
+      if (untracked.length === 0) {
+        if (existing === 0) await discardEmptyDelivery(orgId, held);
+        else {
+          await closeBatch(orgId, held, currency, null);
+          batches += 1;
+        }
+        return summary('nothing left to send');
+      }
+
+      const batch = untracked.slice(0, capacity);
+      const { converted } = await convert(batch, currency);
+      let failure: string | null = null;
+
+      for (const invoice of converted) {
+        const packaged: PackagedInvoice = { ...invoice, filename: invoiceFilename(invoice) };
+
+        let pdf: Buffer | undefined;
+        if (invoice.pdf_id) {
+          try {
+            pdf = await getPdf(invoice.pdf_id);
+          } catch {
+            // The row points at a blob that is gone. Send the figures rather than
+            // holding the invoice back forever over a missing attachment.
+            pdf = undefined;
+          }
+        }
+
+        // Spacing, not throttling after the fact: messages.send costs 100 of
+        // Gmail's 250 per-second quota units, so back to back this would start
+        // returning 429s partway through a run.
+        if (sentAny) await sleep(SEND_INTERVAL_MS);
+
+        // The row may have been swept as stale while this run was slow. Without
+        // the hold, another run could now be mailing the same invoices.
+        const still = await sendingDelivery(orgId);
+        if (still?.id !== held) return summary('stopped, the sending row was closed elsewhere');
+
+        try {
+          await sendAsAccount(accountId, {
+            to: recipient,
+            subject: singleInvoiceSubject(packaged, undefined),
+            text: singleInvoiceBody(packaged, currency, Boolean(pdf)),
+            attachments: pdf
+              ? [{ filename: packaged.filename, content: pdf, mimeType: 'application/pdf' }]
+              : [],
+          });
+        } catch (error) {
+          failure = error instanceof Error ? error.message : String(error);
+          break;
+        }
+        sentAny = true;
+
+        // After the send, never before: recording first would mark an invoice
+        // delivered that a bounce swallowed.
+        await recordDeliveredItem(held, invoice.invoice_id, recipient);
+        delivered += 1;
+      }
+
+      await closeBatch(orgId, held, currency, failure);
+      batches += 1;
+      // A failure stops the run: what went stays delivered, the remainder stays
+      // outstanding, and no further batch starts.
+      if (failure) return summary(`stopped on error: ${failure}`);
+      if (untracked.length <= batch.length) return summary('done');
+    }
+  } catch (error) {
+    // Best effort: leave the row closed rather than locking the org until the
+    // stale sweep. A secondary failure must not mask the original.
+    try {
+      await closeIfHeld(error instanceof Error ? error.message : String(error));
+    } catch {
+      // the original error is the one worth surfacing
+    }
+    throw error;
+  }
 }

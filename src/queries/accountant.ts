@@ -175,7 +175,8 @@ export interface DeliveryRecord {
   period_end: string | null;
   total_minor: number;
   currency: string;
-  status: string;
+  /** 'sending' while a one-by-one run holds the row; invoice_count is then the live count. */
+  status: 'sending' | 'sent' | 'failed';
   error: string | null;
 }
 
@@ -237,6 +238,19 @@ export async function recordDelivery(input: RecordDeliveryInput): Promise<number
 }
 
 /**
+ * Minutes after which a 'sending' row is taken to belong to a dead process.
+ * A batch is at most 25 sends, about 25-60 seconds of work, so ten minutes is
+ * unambiguous evidence that whatever opened the row is no longer running.
+ */
+export const STALE_SENDING_MINUTES = 10;
+
+const UNIQUE_VIOLATION = '23505';
+const ONE_SENDING_INDEX = 'index_accountant_delivery_one_sending';
+
+/** Another one-by-one run already holds this org's single 'sending' row. */
+export class AlreadySendingError extends Error {}
+
+/**
  * Opens a delivery that will be filled in as individual emails land.
  *
  * One-by-one sending cannot use `recordDelivery`, which writes everything in
@@ -245,26 +259,137 @@ export async function recordDelivery(input: RecordDeliveryInput): Promise<number
  * nineteen must stay delivered or the accountant gets them twice on the retry.
  * So the parent row is opened first — the items reference it — and each invoice
  * is recorded the moment its own message is accepted.
+ *
+ * The row is also the org's send lock. It is inserted as 'sending', and a
+ * partial unique index allows one such row per org, so a second run fails here
+ * instead of mailing the same invoices in parallel. Until it is closed it is not
+ * a result, which is why it is not 'sent' with zero totals: that read as a
+ * failure for the whole run.
  */
 export async function startDelivery(input: {
   orgId: number;
   recipient: string;
   currency: string;
 }): Promise<number> {
+  try {
+    const row = await db
+      .insertInto('billing.accountant_delivery')
+      .values({
+        org_id: input.orgId,
+        recipient: input.recipient,
+        currency: input.currency,
+        status: 'sending',
+        invoice_count: 0,
+        service_count: 0,
+        total_minor: 0,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return Number(row.id);
+  } catch (err) {
+    const pg = err as { code?: string; constraint?: string };
+    if (pg.code === UNIQUE_VIOLATION && pg.constraint === ONE_SENDING_INDEX) {
+      throw new AlreadySendingError('already sending — wait for the current run to finish');
+    }
+    throw err;
+  }
+}
+
+export interface SendingDelivery {
+  id: number;
+  recipient: string;
+  currency: string;
+  /** Older than STALE_SENDING_MINUTES: the process that opened it has died. */
+  stale: boolean;
+}
+
+/** The org's live 'sending' row, if any. The partial index guarantees at most one. */
+export async function sendingDelivery(orgId: number): Promise<SendingDelivery | undefined> {
   const row = await db
-    .insertInto('billing.accountant_delivery')
-    .values({
-      org_id: input.orgId,
-      recipient: input.recipient,
-      currency: input.currency,
-      status: 'sent',
-      invoice_count: 0,
-      service_count: 0,
-      total_minor: 0,
-    })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  return Number(row.id);
+    .selectFrom('billing.accountant_delivery')
+    .select([
+      'id',
+      'recipient',
+      'currency',
+      sql<boolean>`sent_at < now() - make_interval(mins => ${STALE_SENDING_MINUTES}::int)`.as(
+        'stale',
+      ),
+    ])
+    .where('org_id', '=', orgId)
+    .where('status', '=', 'sending')
+    .executeTakeFirst();
+  return row
+    ? { id: Number(row.id), recipient: row.recipient, currency: row.currency, stale: row.stale }
+    : undefined;
+}
+
+/**
+ * The invoices recorded under one delivery.
+ *
+ * Same shape as untrackedInvoices so the totals of a closed batch are computed
+ * from what the ledger says went out, not from an in-memory list that a crash
+ * would have lost. The org filter on billing.invoices is the enforcement: items
+ * carry no org_id of their own, so a bare delivery id must never be trusted.
+ */
+export async function deliveryInvoices(
+  orgId: number,
+  deliveryId: number,
+): Promise<UntrackedInvoice[]> {
+  const rows = await db
+    .selectFrom('billing.invoices')
+    .innerJoin('billing.email', 'billing.email.id', 'billing.invoices.email_id')
+    .innerJoin('server.service', 'server.service.id', 'billing.email.server_id')
+    .innerJoin('billing.accountant_delivery_item as item', 'item.invoice_id', 'billing.invoices.id')
+    .select([
+      'billing.invoices.id as invoice_id',
+      displayName(orgId).as('service'),
+      'billing.invoices.invoice_number',
+      'billing.invoices.currency',
+      'billing.invoices.value',
+      sql<string | null>`billing.invoices.pdf_id::text`.as('pdf_id'),
+      EFFECTIVE_DATE.as('effective_date'),
+    ])
+    .where('billing.invoices.org_id', '=', orgId)
+    .where('item.delivery_id', '=', deliveryId)
+    .orderBy(EFFECTIVE_DATE, 'asc')
+    .orderBy('billing.invoices.id', 'asc')
+    .execute();
+
+  return rows.map((r) => ({
+    invoice_id: Number(r.invoice_id),
+    service: r.service,
+    invoice_number: r.invoice_number,
+    currency: r.currency,
+    value: Number(r.value),
+    effective_date: r.effective_date,
+    pdf_id: r.pdf_id,
+  }));
+}
+
+/**
+ * Drops a freshly opened row that found nothing left to send.
+ *
+ * The rare race: the row is opened, then the last outstanding invoice turns out
+ * to be gone. Closing it would leave exactly the "0 invoices" history row this
+ * lock was introduced to remove, so it is deleted instead. Guarded on 'sending'
+ * and on having no items, so it can never erase a row that delivered anything.
+ */
+export async function discardEmptyDelivery(orgId: number, deliveryId: number): Promise<void> {
+  await db
+    .deleteFrom('billing.accountant_delivery')
+    .where('id', '=', deliveryId)
+    .where('org_id', '=', orgId)
+    .where('status', '=', 'sending')
+    .where(({ not, exists, selectFrom }) =>
+      not(
+        exists(
+          selectFrom('billing.accountant_delivery_item as item')
+            .select('item.invoice_id')
+            .whereRef('item.delivery_id', '=', 'billing.accountant_delivery.id'),
+        ),
+      ),
+    )
+    .execute();
 }
 
 /** Marks one invoice delivered, immediately after its own email is accepted. */
@@ -312,6 +437,9 @@ export async function finishDelivery(
       error: totals.error ? totals.error.slice(0, 500) : null,
     })
     .where('id', '=', deliveryId)
+    // First writer wins: a row the stale sweep already closed is not reopened or
+    // rewritten, and two sweeps racing each other are idempotent.
+    .where('status', '=', 'sending')
     .execute();
 }
 
@@ -349,7 +477,13 @@ export async function recentDeliveries(orgId: number, limit = 10): Promise<Deliv
       'id',
       'recipient',
       'sent_at',
-      'invoice_count',
+      // While a run holds the row its stored count is still 0; the live number is
+      // however many items it has recorded so far. The outer org filter scopes
+      // this, since the correlated count is keyed on the row's own id.
+      sql<number>`CASE WHEN status = 'sending'
+        THEN (SELECT count(*) FROM billing.accountant_delivery_item i
+              WHERE i.delivery_id = billing.accountant_delivery.id)
+        ELSE invoice_count END`.as('invoice_count'),
       'service_count',
       sql<string | null>`to_char(period_start, 'YYYY-MM-DD')`.as('period_start'),
       sql<string | null>`to_char(period_end, 'YYYY-MM-DD')`.as('period_end'),
@@ -373,7 +507,7 @@ export async function recentDeliveries(orgId: number, limit = 10): Promise<Deliv
     period_end: r.period_end,
     total_minor: Number(r.total_minor),
     currency: r.currency,
-    status: r.status,
+    status: r.status as DeliveryRecord['status'],
     error: r.error,
   }));
 }
