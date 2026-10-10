@@ -44,6 +44,14 @@ Two consequences worth knowing before you run anything:
   (`pnpm worker`). The API opens the first history row and enqueues; the worker
   does the sending. Never start a worker against the shared `.env` Redis/DB to
   test it — it would mail the real accountant.
+- **Both Railway services must carry the same `GOOGLE_CLIENT_ID` /
+  `GOOGLE_CLIENT_SECRET`.** A Gmail refresh token is bound to the OAuth client
+  that issued it, and mailboxes are connected through the web service
+  (`Invoice-MCP`), so any service that refreshes a token must use that client.
+  `Invoice-Worker` had held a different pair since before the accountant send
+  moved onto it; the first worker-side send on 2026-10-10 failed with Google's
+  `unauthorized_client` and delivered nothing. Fixed by copying the pair from
+  `Invoice-MCP`. When rotating either value, change both services together.
 
 ---
 
