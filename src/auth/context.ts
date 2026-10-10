@@ -37,9 +37,14 @@ export async function resolveAuthContext(req: Request): Promise<AuthContext | un
   // picked up on their next request, without signing in again. It only fires
   // for users with zero memberships, so nobody already in another workspace is
   // pulled into a second one silently.
+  //
+  // Re-read unconditionally rather than only when this call inserted the row:
+  // a user's first page load fires several requests at once, and every one that
+  // loses the insert race would otherwise answer "no workspace" for a user who
+  // has just been given one.
   if (!membership && session.user.emailVerified === true) {
-    const joined = await autoJoinByDomain(session.user.id, session.user.email);
-    if (joined !== undefined) membership = await resolveActiveOrg(session.user.id);
+    await autoJoinByDomain(session.user.id, session.user.email);
+    membership = await resolveActiveOrg(session.user.id);
   }
 
   // A signed-in user with no membership is authenticated but has no tenant to

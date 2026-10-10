@@ -123,6 +123,15 @@ Two consequences worth knowing before you run anything:
 
 ### Fixed
 
+- **Auto-join briefly showed "No workspace" to a user it had just added.**
+  `resolveAuthContext` only re-read the membership when its own
+  `autoJoinByDomain` call inserted the row. A first page load fires several
+  requests at once; one wins the insert and the rest get nothing back, skipped
+  the re-read, and answered `pending` — 5 of 6 concurrent `/api/session` calls,
+  3 out of 3 trials, on the Railway dev database. The re-read is now
+  unconditional (one extra query, only for verified users with no workspace);
+  the same probe returns 6 of 6 authenticated.
+
 - **The Accountant history showed "0 invoices · 0 services £0.00" for the whole
   of a one-by-one run.** `startDelivery` inserted the row with status `sent` and
   zero totals, and `finishDelivery` only filled them in at the end, so for the
