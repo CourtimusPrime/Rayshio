@@ -13,9 +13,25 @@ export async function getOrg(orgId: number) {
       'default_currency',
       'department_mode',
       'zero_charge_mode',
+      'auto_join_domain',
     ])
     .where('id', '=', orgId)
     .executeTakeFirst();
+}
+
+/**
+ * Claim an email domain for auto-join, or pass null to turn it off.
+ *
+ * The column is guarded by the `index_org_auto_join_domain` unique index, and a
+ * unique violation is deliberately left to propagate so the route can answer
+ * 409 — catching it here would hide which tenant problem occurred.
+ */
+export async function setAutoJoinDomain(orgId: number, domain: string | null): Promise<void> {
+  await db
+    .updateTable('client.org')
+    .set({ auto_join_domain: domain })
+    .where('id', '=', orgId)
+    .execute();
 }
 
 /**

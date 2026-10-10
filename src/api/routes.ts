@@ -8,7 +8,8 @@ import {
   outstanding,
   sendOutstanding,
 } from '../accountant/deliver.js';
-import { requireAuth } from '../auth/context.js';
+import { type AuthContext, requireAuth, requireOrgRole } from '../auth/context.js';
+import { claimableDomain } from '../auth/domain.js';
 import { CATEGORIES, normalizeCategory } from '../categories.js';
 import { config, publicMcpUrl } from '../config.js';
 import { gmailConsentUrl } from '../gmail/connect.js';
@@ -75,6 +76,7 @@ import {
   listConnectedAccounts,
   listCurrencies,
   listMonthsWithData,
+  setAutoJoinDomain,
   setBudget,
   setFiscalYearStart,
   setOrgSettings,
@@ -151,11 +153,17 @@ function optionalString(value: unknown): string | undefined {
  * quietly resolve to org 1 — which is exactly the bug this replaces. There is
  * no `orgId ?? default` in this file, or anywhere else.
  */
-function orgOf(req: Request): number {
+function contextOf(req: Request): AuthContext {
   const context = req.authContext;
   if (!context) throw new Error('requireAuth did not run for this request');
-  return context.orgId;
+  return context;
 }
+
+function orgOf(req: Request): number {
+  return contextOf(req).orgId;
+}
+
+const UNIQUE_VIOLATION = '23505';
 
 export function apiRouter(): Router {
   const router = Router();
@@ -185,6 +193,8 @@ export function apiRouter(): Router {
     const account = accounts.find((a) => a.status === 'active') ?? accounts[0];
     const fiscalStart = org?.fiscal_year_start_month ?? 1;
     const monthKeys = months.map((m) => m.month);
+    const viewerContext = contextOf(req);
+    const autoJoinClaim = claimableDomain(viewerContext.email, viewerContext.emailVerified);
     res.json({
       org: {
         id: orgId,
@@ -193,6 +203,17 @@ export function apiRouter(): Router {
         department_mode: org?.department_mode ?? 'single',
         /** 'hide' omits rows charging exactly 0 from every list and breakdown. */
         zero_charge_mode: org?.zero_charge_mode ?? 'hide',
+        auto_join_domain: org?.auto_join_domain ?? null,
+      },
+      /**
+       * Describes the caller, not the org. It is how the settings modal knows
+       * whether to show the auto-join toggle and which domain enabling it would
+       * claim, before anything is stored.
+       */
+      viewer: {
+        role: viewerContext.role,
+        auto_join_candidate: autoJoinClaim.ok ? autoJoinClaim.domain : null,
+        auto_join_blocked_reason: autoJoinClaim.ok ? null : autoJoinClaim.reason,
       },
       account: account
         ? {
@@ -1171,6 +1192,59 @@ export function apiRouter(): Router {
 
     await setOrgSettings(orgId, settings);
     res.json(settings);
+  });
+
+  /*
+   * Strict, so a client that tries to send a domain gets a 400 rather than
+   * having it silently ignored. The domain is never free text: it comes from
+   * the enabling admin's own verified email, because an admin could otherwise
+   * claim a domain they do not control and absorb its users.
+   *
+   * Owner/admin only (`requireOrgRole('admin')` admits owners too). Its own
+   * endpoint rather than a field on PATCH /settings because it needs a role
+   * gate and a domain derived from the caller, neither of which belongs in the
+   * generic settings patch. `requireSameOrigin` already covers this route:
+   * server.ts mounts it on all of /api.
+   */
+  const autoJoinBody = z.object({ enabled: z.boolean() }).strict();
+
+  router.put('/org/auto-join', requireOrgRole('admin'), async (req, res) => {
+    const orgId = orgOf(req);
+    const context = contextOf(req);
+    const parsed = autoJoinBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequest(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+
+    if (!parsed.data.enabled) {
+      await setAutoJoinDomain(orgId, null);
+      res.json({ auto_join_domain: null });
+      return;
+    }
+
+    const claim = claimableDomain(context.email, context.emailVerified);
+    if (!claim.ok) {
+      if (claim.reason === 'unverified') {
+        throw new BadRequest('verify your email address before turning on auto-join');
+      }
+      if (claim.reason === 'public-provider') {
+        throw new BadRequest(
+          `@${claim.domain} is a personal email provider — auto-join needs your company's own domain`,
+        );
+      }
+      throw new BadRequest('your account email has no domain auto-join can use');
+    }
+
+    try {
+      await setAutoJoinDomain(orgId, claim.domain);
+    } catch (err) {
+      if ((err as { code?: string }).code === UNIQUE_VIOLATION) {
+        res.status(409).json({ error: 'that domain is already claimed by another workspace' });
+        return;
+      }
+      throw err;
+    }
+    res.json({ auto_join_domain: claim.domain });
   });
 
   const fiscalBody = z.object({
