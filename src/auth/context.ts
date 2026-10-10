@@ -2,7 +2,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
 import { trustedOrigins } from '../config.js';
 import { auth } from './index.js';
-import { type OrgRole, resolveActiveOrg, roleSatisfies } from './memberships.js';
+import { type OrgRole, autoJoinByDomain, resolveActiveOrg, roleSatisfies } from './memberships.js';
 
 /**
  * Who is asking, and which tenant they are asking about.
@@ -16,18 +16,43 @@ export interface AuthContext {
   userId: string;
   orgId: number;
   role: OrgRole;
+  /**
+   * The caller's own address and whether it is verified. Carried so routes
+   * acting on the caller's identity (enabling auto-join) need no second
+   * auth_user read.
+   */
+  email: string;
+  emailVerified: boolean;
 }
 
 export async function resolveAuthContext(req: Request): Promise<AuthContext | undefined> {
   const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
   if (!session?.user) return undefined;
 
-  const membership = await resolveActiveOrg(session.user.id);
+  let membership = await resolveActiveOrg(session.user.id);
+
+  // A verified user with no workspace may belong to one that has claimed their
+  // email domain. This runs per request rather than in the Better Auth create
+  // hook so users who registered before the workspace turned auto-join on are
+  // picked up on their next request, without signing in again. It only fires
+  // for users with zero memberships, so nobody already in another workspace is
+  // pulled into a second one silently.
+  if (!membership && session.user.emailVerified === true) {
+    const joined = await autoJoinByDomain(session.user.id, session.user.email);
+    if (joined !== undefined) membership = await resolveActiveOrg(session.user.id);
+  }
+
   // A signed-in user with no membership is authenticated but has no tenant to
   // read. That is not an error state — it is the pre-onboarding state — and
   // it must not fall back to some default org.
   if (!membership) return undefined;
-  return { userId: session.user.id, orgId: membership.orgId, role: membership.role };
+  return {
+    userId: session.user.id,
+    orgId: membership.orgId,
+    role: membership.role,
+    email: session.user.email,
+    emailVerified: session.user.emailVerified === true,
+  };
 }
 
 /**

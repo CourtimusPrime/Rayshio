@@ -93,17 +93,22 @@ export const auth = betterAuth({
    *
    * Registering still grants nothing on its own. A new user has no
    * `client.org_member` row, so `resolveAuthContext` yields no org and every
-   * /api route refuses them; membership stays a deliberate act
-   * (`pnpm cli grant-membership`).
+   * /api route refuses them. There are three routes to membership: an
+   * invitation (accepted below at creation), `pnpm cli grant-membership`, and
+   * the opt-in domain rule an owner/admin turns on in Workspace settings,
+   * applied at request time in `resolveAuthContext` to verified users with no
+   * membership.
    */
   databaseHooks: {
     user: {
       create: {
         after: async (user) => {
           // An invited user joins the org that invited them. Everyone else
-          // joins nothing: membership in an existing tenant is granted
-          // deliberately, by `pnpm cli grant-membership`, never inherited by
-          // being first through the door.
+          // joins nothing here: membership in an existing tenant is granted
+          // deliberately (`pnpm cli grant-membership`) or through a workspace's
+          // opt-in domain rule (resolved per request in `resolveAuthContext`),
+          // never inherited by being first through the door — auto-join is
+          // opt-in per workspace, not a default.
           const invitation = await pendingInvitationFor(user.email);
           if (invitation) await acceptInvitation(Number(invitation.id), user.id);
         },

@@ -211,6 +211,10 @@ export interface ClientCategoryRule {
 
 export interface ClientOrg {
   /**
+   * email domain whose verified users auto-join this org as members; null = off
+   */
+  auto_join_domain: string | null;
+  /**
    * currency the budget is denominated in; sums are never converted
    */
   budget_currency: string | null;

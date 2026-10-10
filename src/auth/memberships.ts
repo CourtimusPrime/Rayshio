@@ -1,4 +1,5 @@
 import { db } from '../db/client.js';
+import { emailDomain, isPublicEmailDomain } from './domain.js';
 
 /**
  * The tenancy layer. Better Auth knows who someone is; this knows which orgs
@@ -97,6 +98,56 @@ export async function grantMembership(userId: string, orgId: number, role: OrgRo
     .values({ user_id: userId, org_id: orgId, role })
     .onConflict((oc) => oc.columns(['org_id', 'user_id']).doUpdateSet({ role }))
     .execute();
+}
+
+/**
+ * Join a verified user to the workspace that has claimed their email domain, as
+ * a plain member. Returns the joined org id, or undefined when nothing was
+ * inserted.
+ *
+ * Deliberately not `grantMembership`: that upserts and rewrites the role, so a
+ * later auto-join for someone already present as admin would demote them.
+ * DO NOTHING leaves any existing row untouched.
+ *
+ * The NOT EXISTS lives inside the one statement so "only users with no
+ * membership" holds even if a membership is granted between the caller's check
+ * and this insert; nobody already in a workspace is pulled into a second one.
+ * Public mail-provider domains are skipped before querying, though they cannot
+ * be claimed in the first place.
+ */
+export async function autoJoinByDomain(userId: string, email: string): Promise<number | undefined> {
+  const domain = emailDomain(email);
+  if (domain === undefined || isPublicEmailDomain(domain)) return undefined;
+
+  const row = await db
+    .insertInto('client.org_member')
+    .columns(['org_id', 'user_id', 'role'])
+    .expression((eb) =>
+      eb
+        .selectFrom('client.org as o')
+        .select(['o.id as org_id', eb.val(userId).as('user_id'), eb.val('member').as('role')])
+        .where((w) => w(w.fn('lower', ['o.auto_join_domain']), '=', domain))
+        .where((w) =>
+          w.not(
+            w.exists(
+              w
+                .selectFrom('client.org_member as existing')
+                .select('existing.org_id')
+                .where('existing.user_id', '=', userId),
+            ),
+          ),
+        ),
+    )
+    .onConflict((oc) => oc.columns(['org_id', 'user_id']).doNothing())
+    .returning('org_id')
+    .executeTakeFirst();
+
+  if (!row) return undefined;
+
+  const orgId = Number(row.org_id);
+  // a membership grant nobody asked for in the moment deserves a trail
+  console.info(`auto-join: user ${userId} joined org ${orgId} via @${domain}`);
+  return orgId;
 }
 
 export async function revokeMembership(userId: string, orgId: number): Promise<void> {
