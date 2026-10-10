@@ -179,6 +179,8 @@ const FIXTURES: Record<string, unknown> = {
     previous_period: { key: '2026-Q2', label: 'Q2 2026', rangeLabel: 'Apr – Jun 2026' },
     current_total_minor: 529265,
     previous_total_minor: 441900,
+    budget_minor: 450000,
+    budget_months: 2,
     invoice_count: 47,
     service_count: 5,
     trend: [

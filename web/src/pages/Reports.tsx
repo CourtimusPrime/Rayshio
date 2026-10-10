@@ -1,5 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -31,6 +31,75 @@ import { formatCurrency, formatPercent } from '../utils/format';
  * start makes Jul–Sep "Q2" rather than "Q3".
  */
 const PERIOD_TYPES = ['quarter', 'year'] as const;
+
+/**
+ * Spend against the budget for the months of the period that have started. The
+ * caption renders in every state so the stat row keeps one height when paging
+ * between periods, and the words over/under/On budget carry the state so colour
+ * is never the only signal. A fully future period shows a dash rather than the
+ * whole spend "over" a zero budget.
+ */
+function VsBudgetStat({
+  spend,
+  budget,
+  budgetMonths,
+  periodMonths,
+  periodType,
+  currency,
+}: {
+  spend: number;
+  budget: number | null;
+  budgetMonths: number;
+  periodMonths: number;
+  periodType: PeriodType;
+  currency: string;
+}) {
+  const notStarted = budget !== null && budgetMonths === 0;
+  const inProgress = budgetMonths > 0 && budgetMonths < periodMonths;
+  const diff = budget === null ? 0 : spend - budget;
+
+  let value: ReactNode = '—';
+  let tone = 'text-ink-900';
+  if (budget !== null && !notStarted) {
+    if (diff === 0) {
+      value = 'On budget';
+    } else if (diff > 0) {
+      tone = 'text-danger-text';
+      value = (
+        <>
+          <AnimatedCurrency value={diff} currency={currency} /> over
+        </>
+      );
+    } else {
+      tone = 'text-accent-strong';
+      value = (
+        <>
+          <AnimatedCurrency value={-diff} currency={currency} /> under
+        </>
+      );
+    }
+  }
+
+  let caption = 'No budget set';
+  if (notStarted) caption = 'Period not started';
+  else if (budget !== null && inProgress) {
+    caption = `Budget to date · ${budgetMonths} of ${periodMonths} months`;
+  } else if (budget !== null) caption = `of ${formatCurrency(budget, currency)} budget`;
+
+  return (
+    <div
+      title={
+        inProgress
+          ? `Compared against the budget for ${budgetMonths} of the ${periodMonths} months in this ${periodType}; the period is still in progress`
+          : undefined
+      }
+    >
+      <dt className="text-micro uppercase tracking-wide text-ink-400">Vs budget</dt>
+      <dd className={`tnum mt-1 text-body font-medium ${tone}`}>{value}</dd>
+      <dd className="tnum mt-0.5 text-caption font-normal text-ink-500">{caption}</dd>
+    </div>
+  );
+}
 
 export function Reports() {
   const { currency } = useWorkspace();
@@ -227,30 +296,14 @@ export function Reports() {
                     <AnimatedCount value={data.service_count} />
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-micro uppercase tracking-wide text-ink-400">Vs budget</dt>
-                  {data.budget_minor === null ? (
-                    <dd className="tnum mt-1 text-body font-medium text-ink-900">—</dd>
-                  ) : data.current_total_minor === data.budget_minor ? (
-                    <dd className="tnum mt-1 text-body font-medium text-ink-900">On budget</dd>
-                  ) : data.current_total_minor > data.budget_minor ? (
-                    <dd className="tnum mt-1 text-body font-medium text-danger-text">
-                      <AnimatedCurrency
-                        value={data.current_total_minor - data.budget_minor}
-                        currency={currency}
-                      />{' '}
-                      over
-                    </dd>
-                  ) : (
-                    <dd className="tnum mt-1 text-body font-medium text-accent-strong">
-                      <AnimatedCurrency
-                        value={data.budget_minor - data.current_total_minor}
-                        currency={currency}
-                      />{' '}
-                      under
-                    </dd>
-                  )}
-                </div>
+                <VsBudgetStat
+                  spend={data.current_total_minor}
+                  budget={data.budget_minor}
+                  budgetMonths={data.budget_months}
+                  periodMonths={data.period.months.length}
+                  periodType={data.period.type}
+                  currency={currency}
+                />
               </dl>
 
               <ConversionNote meta={data.conversion} />
